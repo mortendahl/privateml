@@ -321,9 +321,6 @@ y = dot(x, w) + b
 z = reveal(y)
 
 # Actual inputs
-# X = np.array([2**80 for _ in range(10*10)]).reshape((10,10))
-# W = np.array([    2 for _ in range(10*10)]).reshape((10,10))
-# B = np.array([    0 for _ in range(10*10)]).reshape((10,10))
 X = np.random.randn(10,10)
 W = np.random.randn(10,10)
 B = np.random.randn(10,10)
