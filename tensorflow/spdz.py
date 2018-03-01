@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 # TODOs:
+# - config for running on different nodes
 # - truncation operation (using CRT mod operation)
 # - recombine without blowing up numbers (should fit in 64bit word)
 # - gradient computation + SGD
