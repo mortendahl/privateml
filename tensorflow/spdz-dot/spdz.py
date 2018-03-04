@@ -18,6 +18,11 @@ import tensorflow as tf
 log2 = lambda x: log(x)/log(2)
 prod = lambda xs: reduce(lambda x,y: x*y, xs)
 
+from config import (
+    SERVER_0, SERVER_1,
+    CRYPTO_PRODUCER, INPUT_PROVIDER, OUTPUT_RECEIVER,
+    MASTER, SESSION_CONFIG, TENSORBOARD_DIR
+)
 
 # Idea is to simulate five different players on different devices. 
 # Hopefully Tensorflow can take care of (optimising?) networking like this.
@@ -71,23 +76,6 @@ for mi in m: assert 2*log2(mi) + log2(1024) < log2(INT_TYPE.max)
 assert log2(M) >= 2 * (BITPRECISION_INTEGRAL + BITPRECISION_FRACTIONAL) + log2(1024) + TRUNCATION_GAP
 
 K = 2 ** BITPRECISION_FRACTIONAL
-
-
-SERVER_0 = '/device:CPU:0'
-SERVER_1 = '/device:CPU:1'
-CRYPTO_PRODUCER = '/device:CPU:2'
-INPUT_PROVIDER  = '/device:CPU:3'
-OUTPUT_RECEIVER = '/device:CPU:4'
-
-config = tf.ConfigProto(
-    log_device_placement=True,
-    device_count={"CPU": 5},
-    inter_op_parallelism_threads=1,
-    intra_op_parallelism_threads=1
-)
-
-TENSORBOARD_DIR = '/tmp/tensorflow'
-
 
 def egcd(a, b):
     if a == 0:
@@ -147,21 +135,22 @@ def gen_crt_mod():
     b = [ (M // mi) % K for mi in m ]
 
     def crt_mod(x):
-        t = [ (xi * qi) % mi for xi, qi, mi in zip(x, q, m) ]
-        alpha = tf.cast(
-            tf.round(
-                tf.reduce_sum(
-                    [ tf.cast(ti, FLOAT_TYPE) / mi for ti, mi in zip(t, m) ],
-                    axis=0
-                )
-            ),
-            INT_TYPE
-        )
-        v = tf.reduce_sum(
-            [ ti * bi for ti, bi in zip(t, b) ],
-            axis=0
-        ) - B * alpha
-        return decompose(v % K)
+        with tf.name_scope("crt_mod"):
+            t = [ (xi * qi) % mi for xi, qi, mi in zip(x, q, m) ]
+            alpha = tf.cast(
+                tf.round(
+                    tf.reduce_sum(
+                        [ tf.cast(ti, FLOAT_TYPE) / mi for ti, mi in zip(t, m) ],
+                        axis=0
+                    )
+                ),
+                INT_TYPE
+            )
+            v = tf.reduce_sum(
+                [ ti * bi for ti, bi in zip(t, b) ],
+                axis=0
+            ) - B * alpha
+            return decompose(v % K)
 
     return crt_mod
 
@@ -324,7 +313,7 @@ def gen_truncate():
 
         x0, x1 = x.share0, x.share1
 
-        with tf.name_scope("add"):
+        with tf.name_scope("truncate"):
     
             with tf.device(SERVER_0):
                 y0 = raw_truncate(x0)
@@ -417,7 +406,7 @@ inputs = dict(
 )
 
 # Run computation using Tensorflow
-with tf.Session(config=config) as sess:
+with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
 
     writer = tf.summary.FileWriter(TENSORBOARD_DIR, sess.graph)
     run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -425,18 +414,20 @@ with tf.Session(config=config) as sess:
 
     sess.run(tf.global_variables_initializer())
     
-    res = sess.run(
-        z, 
-        inputs,
-        options=run_options,
-        run_metadata=run_metadata
-    )
+    for _ in range(10):
+        res = sess.run(
+            z,
+            inputs,
+            options=run_options,
+            run_metadata=run_metadata
+        )
     
     writer.add_run_metadata(run_metadata, '')
     writer.close()
 
 # Recover result outside Tensorflow
 Z = decode(recombine(res))
+print Z
 
 expected = np.dot(X, W) + B
 actual   = Z
