@@ -43,9 +43,8 @@ tensorboard --logdir=/tmp/tensorflow
 
 and navigate to `http://localhost:6006`.
 
-![Compute time][compute-time]
-
-![Role operations][role-operations]
+<img src="role-operations.png" width="50%" />
+<img src="compute-time.png" width="50%" />
 
 # Complete GCP setup
 
