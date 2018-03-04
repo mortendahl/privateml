@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from config import MASTER, SESSION_CONFIG, TENSORBOARD_DIR
-from spdz import *
+from tensorspdz import *
 
 # Inputs
 input_x, x = define_input((100,100))
@@ -36,7 +36,7 @@ with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
     sess.run(tf.global_variables_initializer())
     
     start = datetime.now()
-    for i in range(100):
+    for i in range(10):
         res = sess.run(
             z,
             inputs,
