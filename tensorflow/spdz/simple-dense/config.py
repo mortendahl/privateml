@@ -1,1 +1,1 @@
-../config-localhost.py
+../config/localhost/config.py

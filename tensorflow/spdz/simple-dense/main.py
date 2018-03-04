@@ -36,7 +36,7 @@ with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
     sess.run(tf.global_variables_initializer())
     
     start = datetime.now()
-    for i in range(10):
+    for i in range(1):
         res = sess.run(
             z,
             inputs,

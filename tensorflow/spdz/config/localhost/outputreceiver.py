@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 
 import tensorflow as tf
 from config import CLUSTER, JOB_NAME
