@@ -43,6 +43,10 @@ tensorboard --logdir=/tmp/tensorflow
 
 and navigate to `http://localhost:6006`.
 
+![Compute time][compute-time]
+
+![Role operations][role-operations]
+
 # Complete GCP setup
 
 In one terminal run the following, starting from your local machine:
