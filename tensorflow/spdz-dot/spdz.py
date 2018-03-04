@@ -2,7 +2,7 @@
 
 # TODOs:
 # - config for running on different nodes
-# - truncation operation (using CRT mod operation)
+# - use PrivateVariable to only mask once
 # - recombine without blowing up numbers (should fit in 64bit word)
 # - gradient computation + SGD
 # - compare performance if native type is float64 instead of int64
@@ -27,8 +27,9 @@ prod = lambda xs: reduce(lambda x,y: x*y, xs)
 # - 5 components for modulus ~120 bits (encoding 16.32)
 #
 # BITPRECISION_INTEGRAL   = 16
-# BITPRECISION_FRACTIONAL = 32
-# NATIVE_TYPE = tf.int64
+# BITPRECISION_FRACTIONAL = 30
+# INT_TYPE = tf.int64
+# FLOAT_TYPE = tf.float64
 # TRUNCATION_GAP = 20
 # m = [89702869, 78489023, 69973811, 70736797, 79637461]
 # M = 2775323292128270996149412858586749843569 # == prod(m)
@@ -48,7 +49,8 @@ prod = lambda xs: reduce(lambda x,y: x*y, xs)
 #
 BITPRECISION_INTEGRAL   = 16
 BITPRECISION_FRACTIONAL = 16
-NATIVE_TYPE = tf.int32
+INT_TYPE = tf.int32
+FLOAT_TYPE = tf.float32
 TRUNCATION_GAP = 20
 m = [1201, 1433, 1217, 1237, 1321, 1103, 1129, 1367, 1093, 1039]
 M = 6616464272061971915798970247351 # == prod(m)
@@ -65,8 +67,10 @@ lambdas = [
     3107636732210050331963327700392
 ]
 
-for mi in m: assert 2*log2(mi) + log2(1024) < log2(NATIVE_TYPE.max)
+for mi in m: assert 2*log2(mi) + log2(1024) < log2(INT_TYPE.max)
 assert log2(M) >= 2 * (BITPRECISION_INTEGRAL + BITPRECISION_FRACTIONAL) + log2(1024) + TRUNCATION_GAP
+
+K = 2 ** BITPRECISION_FRACTIONAL
 
 
 SERVER_0 = '/device:CPU:0'
@@ -83,13 +87,29 @@ config = tf.ConfigProto(
 )
 
 TENSORBOARD_DIR = '/tmp/tensorflow'
-DOT_OP = tf.matmul
 
+
+def egcd(a, b):
+    if a == 0:
+        return (b, 0, 1)
+    else:
+        g, y, x = egcd(b % a, a)
+        return (g, x - (b // a) * y, y)
+    
+def gcd(a, b):
+    g, _, _ = egcd(a, b)
+    return g
+
+def inverse(a, m):
+    _, b, _ = egcd(a, m)
+    return b % m
 
 def encode(rationals, precision=BITPRECISION_FRACTIONAL):
+    """ [NumPy] Encode tensor of rational numbers into tensor of ring elements """
     return (rationals * (2**precision)).astype(int).astype(object) % M
 
 def decode(elements, precision=BITPRECISION_FRACTIONAL):
+    """ [NumPy] Decode tensor of ring elements into tensor of rational numbers """
     map_negative_range = np.vectorize(lambda element: element if element <= M/2 else element - M)
     return map_negative_range(elements).astype(float) / (2**precision)
 
@@ -117,26 +137,39 @@ def crt_mul(x, y):
 
 def crt_dot(x, y):
     with tf.name_scope("crt_dot"):
-        return [ DOT_OP(xi, yi) % mi for xi, yi, mi in zip(x, y, m) ]
+        return [ tf.matmul(xi, yi) % mi for xi, yi, mi in zip(x, y, m) ]
 
-class PrivateVariable:
-    
-    def __init__(self, share0, share1):
-        self.share0 = share0
-        self.share1 = share1
-        
-    def __add__(x, y):
-        return add(x, y)
-    
-    def __sub__(x, y):
-        return sub(x, y)
-    
-    def __mul__(x, y):
-        return mul(x, y)
+def gen_crt_mod():
+
+    # precomputation
+    q = [ inverse(M // mi, mi) for mi in m ]
+    B = M % K
+    b = [ (M // mi) % K for mi in m ]
+
+    def crt_mod(x):
+        t = [ (xi * qi) % mi for xi, qi, mi in zip(x, q, m) ]
+        alpha = tf.cast(
+            tf.round(
+                tf.reduce_sum(
+                    [ tf.cast(ti, FLOAT_TYPE) / mi for ti, mi in zip(t, m) ],
+                    axis=0
+                )
+            ),
+            INT_TYPE
+        )
+        v = tf.reduce_sum(
+            [ ti * bi for ti, bi in zip(t, b) ],
+            axis=0
+        ) - B * alpha
+        return decompose(v % K)
+
+    return crt_mod
+
+crt_mod = gen_crt_mod()
 
 def sample(shape):
     with tf.name_scope("sample"):
-        return [ tf.random_uniform(shape, maxval=mi, dtype=NATIVE_TYPE) for mi in m ]
+        return [ tf.random_uniform(shape, maxval=mi, dtype=INT_TYPE) for mi in m ]
 
 def share(secret):
     with tf.name_scope("share"):
@@ -183,7 +216,7 @@ def sub(x, y):
 
     return PrivateVariable(z0, z1)
 
-def mul(x, y):
+def mul(x, y, truncation=True):
     assert isinstance(x, PrivateVariable)
     assert isinstance(y, PrivateVariable)
     
@@ -226,9 +259,10 @@ def mul(x, y):
                  crt_add(crt_mul(a1, beta),
                          crt_mul(alpha, b1)))
         
-    return PrivateVariable(z0, z1)
+    z = PrivateVariable(z0, z1)
+    return truncate(z) if truncation else z
 
-def dot(x, y):
+def dot(x, y, truncation=True):
     assert isinstance(x, PrivateVariable)
     assert isinstance(y, PrivateVariable)
     
@@ -271,14 +305,66 @@ def dot(x, y):
                  crt_add(crt_dot(a1, beta),
                          crt_dot(alpha, b1)))
         
-    return PrivateVariable(z0, z1)
+    z = PrivateVariable(z0, z1)
+    return truncate(z) if truncation else z 
+
+def gen_truncate():
+    assert gcd(K, M) == 1
+
+    # precomputation for truncation
+    K_inv = decompose(inverse(K, M))
+    M_wrapped = decompose(M)
+
+    def raw_truncate(x):
+        y = crt_sub(x, crt_mod(x))
+        return crt_mul(y, K_inv)
+
+    def truncate(x):
+        assert isinstance(x, PrivateVariable)
+
+        x0, x1 = x.share0, x.share1
+
+        with tf.name_scope("add"):
+    
+            with tf.device(SERVER_0):
+                y0 = raw_truncate(x0)
+
+            with tf.device(SERVER_1):
+                y1 = crt_sub(M_wrapped, raw_truncate(crt_sub(M_wrapped, x1)))
+
+        return PrivateVariable(y0, y1)
+
+    return truncate
+
+truncate = gen_truncate()
+
+class PrivateVariable:
+    
+    def __init__(self, share0, share1):
+        self.share0 = share0
+        self.share1 = share1
+        
+    def __add__(x, y):
+        return add(x, y)
+    
+    def __sub__(x, y):
+        return sub(x, y)
+    
+    def __mul__(x, y):
+        return mul(x, y)
+
+    def dot(x, y):
+        return dot(x, y)
+
+    def truncate(x):
+        return truncate(x)
 
 def define_input(shape):
     
     with tf.name_scope("input"):
         
         with tf.device(INPUT_PROVIDER):
-            input_x = [ tf.placeholder(NATIVE_TYPE, shape=shape) for _ in range(len(m)) ]
+            input_x = [ tf.placeholder(INT_TYPE, shape=shape) for _ in range(len(m)) ]
             x = share(input_x)
         
     return input_x, PrivateVariable(*x)
@@ -314,9 +400,6 @@ input_x, x = define_input((10,10))
 input_w, w = define_input((10,10))
 input_b, b = define_input((10,10))
 
-# TODO: with truncation operation before adding b
-# (and then we don't need double precision for B)
-
 # Computation
 y = dot(x, w) + b
 z = reveal(y)
@@ -330,7 +413,7 @@ B = np.random.randn(10,10)
 inputs = dict(
     [ (xi, Xi) for xi, Xi in zip(input_x, decompose(encode(X))) ] +
     [ (wi, Wi) for wi, Wi in zip(input_w, decompose(encode(W))) ] +
-    [ (bi, Bi) for bi, Bi in zip(input_b, decompose(encode(B, precision=2*BITPRECISION_FRACTIONAL))) ]
+    [ (bi, Bi) for bi, Bi in zip(input_b, decompose(encode(B))) ]
 )
 
 # Run computation using Tensorflow
@@ -353,6 +436,9 @@ with tf.Session(config=config) as sess:
     writer.close()
 
 # Recover result outside Tensorflow
-Z = decode(recombine(res), precision=2*BITPRECISION_FRACTIONAL)
+Z = decode(recombine(res))
 
-assert (Z - (np.dot(X, W) + B) < 1e-3).all()
+expected = np.dot(X, W) + B
+actual   = Z
+diff = expected - actual
+assert (abs(diff) < 1e-3).all(), diff
