@@ -1,14 +1,11 @@
-#!/usr/bin/env python2
 
 # TODOs:
-# - config for running on different nodes
 # - use PrivateVariable to only mask once
 # - recombine without blowing up numbers (should fit in 64bit word)
 # - gradient computation + SGD
 # - compare performance if native type is float64 instead of int64
 # - performance on GPU
 
-from datetime import datetime
 from functools import reduce
 from math import log
 
@@ -20,8 +17,7 @@ prod = lambda xs: reduce(lambda x,y: x*y, xs)
 
 from config import (
     SERVER_0, SERVER_1,
-    CRYPTO_PRODUCER, INPUT_PROVIDER, OUTPUT_RECEIVER,
-    MASTER, SESSION_CONFIG, TENSORBOARD_DIR
+    CRYPTO_PRODUCER, INPUT_PROVIDER, OUTPUT_RECEIVER
 )
 
 # Idea is to simulate five different players on different devices. 
@@ -212,11 +208,14 @@ def mul(x, y, truncation=True):
     x0, x1 = x.share0, x.share1
     y0, y1 = y.share0, y.share1
 
+    x_shape = x.shape
+    y_shape = y.shape
+
     with tf.name_scope("mul"):
     
         with tf.device(CRYPTO_PRODUCER):
-            a = sample((10,10))
-            b = sample((10,10))
+            a = sample(x_shape)
+            b = sample(y_shape)
             ab = crt_mul(a, b)
 
             a0, a1 = share(a)
@@ -258,11 +257,14 @@ def dot(x, y, truncation=True):
     x0, x1 = x.share0, x.share1
     y0, y1 = y.share0, y.share1
 
+    x_shape = x.shape
+    y_shape = y.shape
+
     with tf.name_scope("dot"):
-    
+
         with tf.device(CRYPTO_PRODUCER):
-            a = sample((10,10))
-            b = sample((10,10))
+            a = sample(x_shape)
+            b = sample(y_shape)
             ab = crt_dot(a, b)
 
             a0, a1 = share(a)
@@ -332,7 +334,11 @@ class PrivateVariable:
     def __init__(self, share0, share1):
         self.share0 = share0
         self.share1 = share1
-        
+    
+    @property
+    def shape(self):
+        return self.share0[0].shape
+
     def __add__(x, y):
         return add(x, y)
     
@@ -379,57 +385,3 @@ def reveal(x):
             y = reconstruct(x0, x1)
     
     return y
-
-#
-# Simple addition
-#
-
-# Inputs
-input_x, x = define_input((10,10))
-input_w, w = define_input((10,10))
-input_b, b = define_input((10,10))
-
-# Computation
-y = dot(x, w) + b
-z = reveal(y)
-
-# Actual inputs
-X = np.random.randn(10,10)
-W = np.random.randn(10,10)
-B = np.random.randn(10,10)
-
-# Decomposed values outside Tensorflow
-inputs = dict(
-    [ (xi, Xi) for xi, Xi in zip(input_x, decompose(encode(X))) ] +
-    [ (wi, Wi) for wi, Wi in zip(input_w, decompose(encode(W))) ] +
-    [ (bi, Bi) for bi, Bi in zip(input_b, decompose(encode(B))) ]
-)
-
-# Run computation using Tensorflow
-with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
-
-    writer = tf.summary.FileWriter(TENSORBOARD_DIR, sess.graph)
-    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-    run_metadata = tf.RunMetadata()
-
-    sess.run(tf.global_variables_initializer())
-    
-    for _ in range(10):
-        res = sess.run(
-            z,
-            inputs,
-            options=run_options,
-            run_metadata=run_metadata
-        )
-    
-    writer.add_run_metadata(run_metadata, '')
-    writer.close()
-
-# Recover result outside Tensorflow
-Z = decode(recombine(res))
-print Z
-
-expected = np.dot(X, W) + B
-actual   = Z
-diff = expected - actual
-assert (abs(diff) < 1e-3).all(), diff
