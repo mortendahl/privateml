@@ -1,6 +1,5 @@
 
 # TODOs:
-# - use PrivateVariable to only mask once
 # - recombine without blowing up numbers (should fit in 64bit word)
 # - gradient computation + SGD
 # - compare performance if native type is float64 instead of int64
