@@ -14,3 +14,5 @@ SESSION_CONFIG = tf.ConfigProto(
 )
 
 TENSORBOARD_DIR = '/tmp/tensorflow'
+
+MASTER = ''

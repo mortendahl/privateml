@@ -5,6 +5,9 @@
 # - gradient computation + SGD
 # - compare performance if native type is float64 instead of int64
 # - performance on GPU
+# - better cache strategy?
+# - does it make sense to cache additions, subtractions, etc as well?
+# - make truncation optional; should work even with cached results
 
 from functools import reduce
 from math import log
@@ -167,6 +170,8 @@ def reconstruct(share0, share1):
     with tf.name_scope("reconstruct"):
         return crt_add(share0, share1)
 
+cached_results = dict()
+
 def add(x, y):
     assert isinstance(x, PrivateVariable)
     assert isinstance(y, PrivateVariable)
@@ -201,103 +206,191 @@ def sub(x, y):
 
     return PrivateVariable(z0, z1)
 
-def mul(x, y, truncation=True):
+def mul(x, y):
     assert isinstance(x, PrivateVariable)
     assert isinstance(y, PrivateVariable)
-    
+
     x0, x1 = x.share0, x.share1
     y0, y1 = y.share0, y.share1
 
     x_shape = x.shape
     y_shape = y.shape
 
-    with tf.name_scope("mul"):
+    z = cached_results.get(('mul',x,y), None)
+
+    if z is None:
+
+        with tf.name_scope("mul"):
     
-        with tf.device(CRYPTO_PRODUCER):
-            a = sample(x_shape)
-            b = sample(y_shape)
-            ab = crt_mul(a, b)
+            if x.masked is not None:
+                a, a0, a1, alpha_on_0, alpha_on_1 = x.masked
+            else:
 
-            a0, a1 = share(a)
-            b0, b1 = share(b)
-            ab0, ab1 = share(ab)
+                with tf.device(CRYPTO_PRODUCER):
+                    a = sample(x_shape)
+                    a0, a1 = share(a)
 
-        with tf.device(SERVER_0):
-            alpha0 = crt_sub(x0, a0)
-            beta0  = crt_sub(y0, b0)
+                with tf.device(SERVER_0):
+                    alpha0 = crt_sub(x0, a0)
 
-        with tf.device(SERVER_1):
-            alpha1 = crt_sub(x1, a1)
-            beta1  = crt_sub(y1, b1)
+                with tf.device(SERVER_1):
+                    alpha1 = crt_sub(x1, a1)
 
-        # exchange of alpha's and beta's
+                # exchange of alphas
 
-        with tf.device(SERVER_0):
-            alpha = reconstruct(alpha0, alpha1)
-            beta = reconstruct(beta0, beta1)
-            z0 = crt_add(ab0,
-                 crt_add(crt_mul(a0, beta),
-                 crt_add(crt_mul(alpha, b0),
-                         crt_mul(alpha, beta))))
+                with tf.device(SERVER_0):
+                    alpha = reconstruct(alpha0, alpha1)
+                    alpha_on_0 = alpha # needed for saving in `masked`
 
-        with tf.device(SERVER_1):
-            alpha = reconstruct(alpha0, alpha1)
-            beta = reconstruct(beta0, beta1)
-            z1 = crt_add(ab1,
-                 crt_add(crt_mul(a1, beta),
-                         crt_mul(alpha, b1)))
+                with tf.device(SERVER_1):
+                    alpha = reconstruct(alpha0, alpha1)
+                    alpha_on_1 = alpha # needed for saving in `masked`
+
+                x.masked = (a, a0, a1, alpha_on_0, alpha_on_1)
+
+            if y.masked is not None:
+                b, b0, b1, beta_on_0, beta_on_1 = y.masked
+            else:
+
+                with tf.device(CRYPTO_PRODUCER):
+                    b = sample(y_shape)
+                    b0, b1 = share(b)
+
+                with tf.device(SERVER_0):
+                    beta0 = crt_sub(y0, b0)
+
+                with tf.device(SERVER_1):
+                    beta1 = crt_sub(y1, b1)
+
+                # exchange of betas
+
+                with tf.device(SERVER_0):
+                    beta = reconstruct(beta0, beta1)
+                    beta_on_0 = beta # needed for saving in `masked`
+
+                with tf.device(SERVER_1):
+                    beta = reconstruct(beta0, beta1)
+                    beta_on_1 = beta # needed for saving in `masked`
+
+                y.masked = (b, b0, b1, beta_on_0, beta_on_1)
+
+            with tf.device(CRYPTO_PRODUCER):
+                ab = crt_mul(a, b)
+                ab0, ab1 = share(ab)
+
+            with tf.device(SERVER_0):
+                alpha = alpha_on_0
+                beta = beta_on_0
+                z0 = crt_add(ab0,
+                    crt_add(crt_mul(a0, beta),
+                    crt_add(crt_mul(alpha, b0),
+                            crt_mul(alpha, beta))))
+
+            with tf.device(SERVER_1):
+                alpha = alpha_on_1
+                beta = beta_on_1
+                z1 = crt_add(ab1,
+                    crt_add(crt_mul(a1, beta),
+                            crt_mul(alpha, b1)))
         
-    z = PrivateVariable(z0, z1)
-    return truncate(z) if truncation else z
+        z = PrivateVariable(z0, z1)
+        z = truncate(z)
+        cached_results[('mul',x,y)] = z
 
-def dot(x, y, truncation=True):
+    return z
+
+def dot(x, y):
     assert isinstance(x, PrivateVariable)
     assert isinstance(y, PrivateVariable)
-    
+
     x0, x1 = x.share0, x.share1
     y0, y1 = y.share0, y.share1
 
     x_shape = x.shape
     y_shape = y.shape
 
-    with tf.name_scope("dot"):
+    z = cached_results.get(('dot',x,y), None)
 
-        with tf.device(CRYPTO_PRODUCER):
-            a = sample(x_shape)
-            b = sample(y_shape)
-            ab = crt_dot(a, b)
+    if z is None:
 
-            a0, a1 = share(a)
-            b0, b1 = share(b)
-            ab0, ab1 = share(ab)
+        with tf.name_scope("dot"):
 
-        with tf.device(SERVER_0):
-            alpha0 = crt_sub(x0, a0)
-            beta0  = crt_sub(y0, b0)
+            if x.masked is not None:
+                a, a0, a1, alpha_on_0, alpha_on_1 = x.masked
+            else:
 
-        with tf.device(SERVER_1):
-            alpha1 = crt_sub(x1, a1)
-            beta1  = crt_sub(y1, b1)
+                with tf.device(CRYPTO_PRODUCER):
+                    a = sample(x_shape)
+                    a0, a1 = share(a)
 
-        # exchange of alpha's and beta's
+                with tf.device(SERVER_0):
+                    alpha0 = crt_sub(x0, a0)
 
-        with tf.device(SERVER_0):
-            alpha = reconstruct(alpha0, alpha1)
-            beta = reconstruct(beta0, beta1)
-            z0 = crt_add(ab0,
-                 crt_add(crt_dot(a0, beta),
-                 crt_add(crt_dot(alpha, b0),
-                         crt_dot(alpha, beta))))
+                with tf.device(SERVER_1):
+                    alpha1 = crt_sub(x1, a1)
 
-        with tf.device(SERVER_1):
-            alpha = reconstruct(alpha0, alpha1)
-            beta = reconstruct(beta0, beta1)
-            z1 = crt_add(ab1,
-                 crt_add(crt_dot(a1, beta),
-                         crt_dot(alpha, b1)))
-        
-    z = PrivateVariable(z0, z1)
-    return truncate(z) if truncation else z 
+                # exchange of alphas
+
+                with tf.device(SERVER_0):
+                    alpha = reconstruct(alpha0, alpha1)
+                    alpha_on_0 = alpha # needed for saving in `masked`
+
+                with tf.device(SERVER_1):
+                    alpha = reconstruct(alpha0, alpha1)
+                    alpha_on_1 = alpha # needed for saving in `masked`
+
+                x.masked = (a, a0, a1, alpha_on_0, alpha_on_1)
+
+            if y.masked is not None:
+                b, b0, b1, beta_on_0, beta_on_1 = y.masked
+            else:
+
+                with tf.device(CRYPTO_PRODUCER):
+                    b = sample(y_shape)
+                    b0, b1 = share(b)
+
+                with tf.device(SERVER_0):
+                    beta0 = crt_sub(y0, b0)
+
+                with tf.device(SERVER_1):
+                    beta1 = crt_sub(y1, b1)
+
+                # exchange of betas
+
+                with tf.device(SERVER_0):
+                    beta = reconstruct(beta0, beta1)
+                    beta_on_0 = beta # needed for saving in `masked`
+
+                with tf.device(SERVER_1):
+                    beta = reconstruct(beta0, beta1)
+                    beta_on_1 = beta # needed for saving in `masked`
+
+                y.masked = (b, b0, b1, beta_on_0, beta_on_1)
+
+            with tf.device(CRYPTO_PRODUCER):
+                ab = crt_dot(a, b)
+                ab0, ab1 = share(ab)
+
+            with tf.device(SERVER_0):
+                alpha = alpha_on_0
+                beta = beta_on_0
+                z0 = crt_add(ab0,
+                     crt_add(crt_dot(a0, beta),
+                     crt_add(crt_dot(alpha, b0),
+                             crt_dot(alpha, beta))))
+
+            with tf.device(SERVER_1):
+                alpha = alpha_on_1
+                beta = beta_on_1
+                z1 = crt_add(ab1,
+                     crt_add(crt_dot(a1, beta),
+                             crt_dot(alpha, b1)))
+
+        z = PrivateVariable(z0, z1)
+        z = truncate(z)
+        cached_results[('dot',x,y)] = z
+
+    return z
 
 def gen_truncate():
     assert gcd(K, M) == 1
@@ -334,6 +427,7 @@ class PrivateVariable:
     def __init__(self, share0, share1):
         self.share0 = share0
         self.share1 = share1
+        self.masked = None
     
     @property
     def shape(self):
