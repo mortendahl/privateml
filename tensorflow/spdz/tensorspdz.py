@@ -219,11 +219,11 @@ def mul(x, y):
 
     if z is None:
 
-        with tf.name_scope("mul"):
-    
-            if x.masked is not None:
-                a, a0, a1, alpha_on_0, alpha_on_1 = x.masked
-            else:
+        if x.masked is not None:
+            a, a0, a1, alpha_on_0, alpha_on_1 = x.masked
+        else:
+
+            with tf.name_scope("masking"):
 
                 with tf.device(CRYPTO_PRODUCER):
                     a = sample(x_shape)
@@ -245,11 +245,13 @@ def mul(x, y):
                     alpha = reconstruct(alpha0, alpha1)
                     alpha_on_1 = alpha # needed for saving in `masked`
 
-                x.masked = (a, a0, a1, alpha_on_0, alpha_on_1)
+            x.masked = (a, a0, a1, alpha_on_0, alpha_on_1)
 
-            if y.masked is not None:
-                b, b0, b1, beta_on_0, beta_on_1 = y.masked
-            else:
+        if y.masked is not None:
+            b, b0, b1, beta_on_0, beta_on_1 = y.masked
+        else:
+
+            with tf.name_scope("masking"):
 
                 with tf.device(CRYPTO_PRODUCER):
                     b = sample(y_shape)
@@ -271,7 +273,9 @@ def mul(x, y):
                     beta = reconstruct(beta0, beta1)
                     beta_on_1 = beta # needed for saving in `masked`
 
-                y.masked = (b, b0, b1, beta_on_0, beta_on_1)
+            y.masked = (b, b0, b1, beta_on_0, beta_on_1)
+
+        with tf.name_scope("mul"):
 
             with tf.device(CRYPTO_PRODUCER):
                 ab = crt_mul(a, b)
@@ -312,11 +316,11 @@ def dot(x, y):
 
     if z is None:
 
-        with tf.name_scope("dot"):
+        if x.masked is not None:
+            a, a0, a1, alpha_on_0, alpha_on_1 = x.masked
+        else:
 
-            if x.masked is not None:
-                a, a0, a1, alpha_on_0, alpha_on_1 = x.masked
-            else:
+            with tf.name_scope("masking"):
 
                 with tf.device(CRYPTO_PRODUCER):
                     a = sample(x_shape)
@@ -338,11 +342,13 @@ def dot(x, y):
                     alpha = reconstruct(alpha0, alpha1)
                     alpha_on_1 = alpha # needed for saving in `masked`
 
-                x.masked = (a, a0, a1, alpha_on_0, alpha_on_1)
+            x.masked = (a, a0, a1, alpha_on_0, alpha_on_1)
 
-            if y.masked is not None:
-                b, b0, b1, beta_on_0, beta_on_1 = y.masked
-            else:
+        if y.masked is not None:
+            b, b0, b1, beta_on_0, beta_on_1 = y.masked
+        else:
+
+            with tf.name_scope("masking"):
 
                 with tf.device(CRYPTO_PRODUCER):
                     b = sample(y_shape)
@@ -364,7 +370,9 @@ def dot(x, y):
                     beta = reconstruct(beta0, beta1)
                     beta_on_1 = beta # needed for saving in `masked`
 
-                y.masked = (b, b0, b1, beta_on_0, beta_on_1)
+            y.masked = (b, b0, b1, beta_on_0, beta_on_1)
+
+        with tf.name_scope("dot"):
 
             with tf.device(CRYPTO_PRODUCER):
                 ab = crt_dot(a, b)
