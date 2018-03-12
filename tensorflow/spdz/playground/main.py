@@ -5,6 +5,9 @@ from datetime import datetime
 from config import MASTER, SESSION_CONFIG, TENSORBOARD_DIR
 from tensorspdz import *
 
+from tensorflow.python.client import timeline
+
+
 # Inputs
 input_x, x = define_input((100,100))
 input_y, y = define_input((100,100))
@@ -34,18 +37,29 @@ with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
 
     sess.run(tf.global_variables_initializer())
     
-    start = datetime.now()
-    for i in range(1):
+    durations = []
+    for i in range(10):
+
+        start = datetime.now()
         res = sess.run(
             v,
             inputs,
             options=run_options,
             run_metadata=run_metadata
         )
-        writer.add_run_metadata(run_metadata, 'run-{}'.format(i))
-    end = datetime.now()
+        end = datetime.now()
+        durations.append(end - start)
 
-    print(end - start)
+        writer.add_run_metadata(run_metadata, 'run-{}'.format(i))
+
+        chrome_trace = timeline \
+            .Timeline(run_metadata.step_stats) \
+            .generate_chrome_trace_format()
+        with open('{}/timeline_{}.ctr.json'.format(TENSORBOARD_DIR, i), 'w') as f:
+            f.write(chrome_trace)
+
+    for duration in durations:
+        print(duration)
 
     writer.close()
 
