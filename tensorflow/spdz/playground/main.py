@@ -14,7 +14,8 @@ input_y, y = define_input((100,100))
 input_z, z = define_input((100,100))
 
 # Computation
-v = reveal(dot(x, y) + dot(x, z))
+# v = reveal(dot(x, y) + dot(x, z))
+v = reveal(square(x))
 
 # Actual inputs
 X = np.random.randn(100,100)
@@ -66,7 +67,8 @@ with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
 # Recover result outside Tensorflow
 V = decode(recombine(res))
 
-expected = np.dot(X, Y) + np.dot(X, Z)
+# expected = np.dot(X, Y) + np.dot(X, Z)
+expected = X * X
 actual   = V
 diff = expected - actual
 assert (abs(diff) < 1e-2).all(), abs(diff).max()

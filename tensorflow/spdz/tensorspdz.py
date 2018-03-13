@@ -362,13 +362,6 @@ def mul(x, y):
 
     return z
 
-def square(x):
-    assert isinstance(x, PrivateVariable)
-
-    x0, x1 = x.share0, x.share1
-
-    # TODO
-
 def dot(x, y):
     assert isinstance(x, PrivateVariable)
     assert isinstance(y, PrivateVariable)
