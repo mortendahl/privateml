@@ -1,5 +1,11 @@
 #!/usr/bin/env python2
 
+# hack to import tensorspdz from parent directory
+# - https://stackoverflow.com/questions/714063/importing-modules-from-parent-folder
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
+
 from datetime import datetime
 
 from config import MASTER, SESSION_CONFIG, TENSORBOARD_DIR
