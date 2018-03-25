@@ -68,29 +68,33 @@ def accuracy(w):
 #       Public training      #
 ##############################
 
-w = np.zeros(shape_w)
+def public_training():
 
-start = datetime.now()
+    w = np.zeros(shape_w)
 
-for _ in range(epochs):
-    for x, y in zip(batches_x, batches_y):
-        # forward
-        y_pred = np_sigmoid(np.dot(x, w))
-        # backward
-        error = y_pred - y
-        gradients = np.dot(x.transpose(), error) * 1./batch_size
-        w = w - gradients * learning_rate
+    start = datetime.now()
 
-end = datetime.now()
-print end-start
+    for _ in range(epochs):
+        for x, y in zip(batches_x, batches_y):
+            # forward
+            y_pred = np_sigmoid(np.dot(x, w))
+            # backward
+            error = y_pred - y
+            gradients = np.dot(x.transpose(), error) * 1./batch_size
+            w = w - gradients * learning_rate
 
-print w, accuracy(w)
+    end = datetime.now()
+    print end-start
+
+    print w, accuracy(w)
+
+    return w
 
 ##############################
 #      Private training      #
 ##############################
 
-def define_masked_tensor_queue(shape, capacity):
+def define_batch_buffer(shape, capacity):
 
     # each server holds three values: xi, ai, and alpha
     server_packed_shape = (3, len(m),) + tuple(shape)
@@ -121,9 +125,9 @@ def define_masked_tensor_queue(shape, capacity):
 
     return (queue_0, queue_1, queue_cp)
 
-def enqueue_masked_tensor(shape, queue):
+def distribute_batch(shape, buffer):
 
-    queue_0, queue_1, queue_cp = queue
+    queue_0, queue_1, queue_cp = buffer
 
     def pack_server(tensors):
         with tf.name_scope('pack'):
@@ -145,20 +149,23 @@ def enqueue_masked_tensor(shape, queue):
         a0, a1 = share(a)
         alpha = crt_sub(input_x, a)
 
-        # TODO loop
-        # TODO do we need to enqueue on the right devices?
-        populate_op = [
-            queue_0.enqueue(pack_server([x0, a0, alpha])),
-            queue_1.enqueue(pack_server([x1, a1, alpha])),
-            queue_cp.enqueue(pack_cryptoproducer(a))
-        ]
+        with tf.device(SERVER_0):
+            enqueue_0 = queue_0.enqueue(pack_server([x0, a0, alpha]))
+
+        with tf.device(SERVER_1):
+            enqueue_1 = queue_1.enqueue(pack_server([x1, a1, alpha]))
+
+        with tf.device(CRYPTO_PRODUCER):
+            enqueue_cp = queue_cp.enqueue(pack_cryptoproducer(a))
+
+        populate_op = [enqueue_0, enqueue_1, enqueue_cp]
 
     return input_x, populate_op
 
-def dequeue_masked_tensor(shape, queue):
+def load_batch(shape, buffer):
 
     shape = tuple(shape)
-    queue_0, queue_1, queue_cp = queue
+    queue_0, queue_1, queue_cp = buffer
 
     def unpack_server(tensors):
         with tf.name_scope('unpack'):
@@ -201,9 +208,9 @@ def dequeue_masked_tensor(shape, queue):
 
     return x, [reenqueue_0, reenqueue_1, reenqueue_cp]
 
-def training_loop(queues, shapes, iterations, initial_weights, training_step):
+def training_loop(buffers, shapes, iterations, initial_weights, training_step):
 
-    queue_x, queue_y = queues
+    buffer_x, buffer_y = buffers
     shape_x, shape_y = shapes
 
     initial_w0, initial_w1 = share(initial_weights)
@@ -211,8 +218,8 @@ def training_loop(queues, shapes, iterations, initial_weights, training_step):
     # TODO re-enqueue using `re_x` and `re_y`
     def loop_op(w0, w1):
         w = PrivateTensor(w0, w1)
-        x, re_x = dequeue_masked_tensor(shape_x, queue_x)
-        y, re_y = dequeue_masked_tensor(shape_y, queue_y)
+        x, re_x = load_batch(shape_x, buffer_x)
+        y, re_y = load_batch(shape_y, buffer_y)
         new_w = training_step(w, x, y)
         return new_w.share0, new_w.share1
 
@@ -225,156 +232,34 @@ def training_loop(queues, shapes, iterations, initial_weights, training_step):
 
     return final_w0, final_w1
 
-queue_x = define_masked_tensor_queue(shape_x, num_batches)
-queue_y = define_masked_tensor_queue(shape_y, num_batches)
+buffer_x = define_batch_buffer(shape_x, num_batches)
+buffer_y = define_batch_buffer(shape_y, num_batches)
 
-input_x, enqueue_x = enqueue_masked_tensor(shape_x, queue_x)
-input_y, enqueue_y = enqueue_masked_tensor(shape_y, queue_y)
+input_x, distribute_x = distribute_batch(shape_x, buffer_x)
+input_y, distribute_y = distribute_batch(shape_y, buffer_y)
 
 def training_step(w, x, y):
-    
     with tf.name_scope('forward'):
         y_pred = sigmoid(dot(x, w))
-
     with tf.name_scope('backward'):
         error = sub(y_pred, y)
         gradients = scale(dot(transpose(x), error), 1./batch_size)
         return sub(w, scale(gradients, learning_rate))
 
 training = training_loop(
-    queues=(queue_x, queue_y),
+    buffers=(buffer_x, buffer_y),
     shapes=(shape_x, shape_y),
-    iterations=5, #num_batches,
+    iterations=num_batches,
     initial_weights=decompose(np.zeros(shape=shape_w)),
     training_step=training_step
 )
 
-# move on to TensorFlow
-with session() as sess:
+##############################
+#     Private prediction     #
+##############################
 
-    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-    run_metadata = tf.RunMetadata()
+def private_prediction(sess, w):
 
-    writer = tf.summary.FileWriter(TENSORBOARD_DIR, sess.graph)
-
-    print 'Populating...'
-    for batch_x, batch_y in zip(batches_x, batches_y):
-        sess.run(
-            enqueue_x,
-            feed_dict=dict([
-                (input_xi, Xi) for input_xi, Xi in zip(input_x, decompose(encode(batch_x)))
-            ]),
-            # options=run_options,
-            # run_metadata=run_metadata
-        )
-        # writer.add_run_metadata(run_metadata, 'enqueue-x-{}'.format(i))
-
-        sess.run(
-            enqueue_y,
-            feed_dict=dict([
-                (input_yi, Yi) for input_yi, Yi in zip(input_y, decompose(encode(batch_y)))
-            ]),
-            # options=run_options,
-            # run_metadata=run_metadata
-        )
-        # writer.add_run_metadata(run_metadata, 'enqueue-y-{}'.format(i))
-
-    print 'Training...'
-    start = datetime.now()
-    w0, w1 = sess.run(
-        training,
-        options=run_options,
-        run_metadata=run_metadata
-    )
-    end = datetime.now()
-    print end-start
-    writer.add_run_metadata(run_metadata, 'train')
-
-    w = decode(recombine(reconstruct(w0, w1)))
-    print w, accuracy(w)
-
-    writer.close()
-
-    exit(0)
-
-    ##############################
-    #      Model parameters      #
-    ##############################
-
-    init_w, w = define_variable(np.zeros(shape=(3,1)))
-    sess.run(init_w)
-
-    ##############################
-    #          Training          #
-    ##############################
-
-    # learning_rate = 0.01
-    # training_epochs = 10
-    # batch_size = 100
-    # assert m % batch_size == 0
-
-    # initializers = []
-    # optimizers = []
-
-    # print 'Constructing graph...'
-    # for batch_index in range(m // batch_size):
-        
-    #     batch_X = X[batch_size*batch_index : batch_size*(batch_index+1)]
-    #     batch_Y = Y[batch_size*batch_index : batch_size*(batch_index+1)]
-        
-    #     init_batch_x, batch_x = define_variable(batch_X)
-    #     init_batch_y, batch_y = define_variable(batch_Y)
-    #     initializers.append(init_batch_x)
-    #     initializers.append(init_batch_y)
-        
-    #     with tf.name_scope('forward'):
-    #         batch_y_pred = sigmoid(dot(batch_x, w))
-
-    #     with tf.name_scope('backward'):
-    #         error = sub(batch_y_pred, batch_y)
-    #         gradients = scale(dot(transpose(batch_x), error), 1./batch_size)
-    #         optimizer = assign(w, sub(w, scale(gradients, learning_rate)))
-        
-    #     optimizers.append(optimizer)
-
-    #     _ = sess.run(tf.global_variables_initializer())
-        
-    #     print 'Running initializers...'
-    #     _ = sess.run(
-    #         initializers,
-    #         options=run_options,
-    #         run_metadata=run_metadata
-    #     )
-    #     writer.add_run_metadata(run_metadata, 'initializers')
-    #     chrome_trace = timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format()
-    #     with open('{}/initializers.ctr.json'.format(TENSORBOARD_DIR), 'w') as f:
-    #         f.write(chrome_trace)
-        
-    #     print 'Running optimizers...'
-    #     _ = sess.run(
-    #         optimizers,
-    #         options=run_options,
-    #         run_metadata=run_metadata
-    #     )
-    #     writer.add_run_metadata(run_metadata, 'optimizers')
-    #     chrome_trace = timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format()
-    #     with open('{}/optimizers.ctr.json'.format(TENSORBOARD_DIR), 'w') as f:
-    #         f.write(chrome_trace)
-
-    #     W = decode(recombine(sess.run(reveal(w))))
-
-    #     writer.close()
-
-    # print 'Computing accuracy'
-    # sigmoid = lambda x: 1 / (1 + np.exp(-x))
-    # preds = np.round(sigmoid(np.dot(X, W)))
-    # accuracy = (preds == Y).sum().astype(float) / len(preds)
-    # print accuracy
-
-    ##############################
-    #         Prediction         #
-    ##############################
-    
     INPUT_SIZE = 300
 
     input_x, x = define_input((INPUT_SIZE,3))
@@ -403,4 +288,57 @@ with session() as sess:
         with open('{}/{}.ctr.json'.format(TENSORBOARD_DIR, 'prediction-{}'.format(i)), 'w') as f:
             f.write(chrome_trace)
 
+    writer.close()
+
+    return Y
+
+##############################
+#            Run             #
+##############################
+
+with session() as sess:
+
+    writer = tf.summary.FileWriter(TENSORBOARD_DIR, sess.graph)
+    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+    run_metadata = tf.RunMetadata()
+
+    print 'Distributing...'
+    for batch_x, batch_y in zip(batches_x, batches_y):
+
+        sess.run(
+            distribute_x,
+            feed_dict=dict([
+                (input_xi, Xi) for input_xi, Xi in zip(input_x, decompose(encode(batch_x)))
+            ]),
+            options=run_options,
+            run_metadata=run_metadata
+        )
+        # writer.add_run_metadata(run_metadata, 'enqueue-x-{}'.format(i))
+
+        sess.run(
+            distribute_y,
+            feed_dict=dict([
+                (input_yi, Yi) for input_yi, Yi in zip(input_y, decompose(encode(batch_y)))
+            ]),
+            options=run_options,
+            run_metadata=run_metadata
+        )
+        # writer.add_run_metadata(run_metadata, 'enqueue-y-{}'.format(i))
+
+    print 'Training...'
+    # start = datetime.now()
+    w0, w1 = sess.run(
+        training,
+        options=run_options,
+        run_metadata=run_metadata
+    )
+    # end = datetime.now()
+    # print end-start
+    # writer.add_run_metadata(run_metadata, 'train')
+
+    # w = decode(recombine(reconstruct(w0, w1)))
+    # print w, accuracy(w)
+
+    # y = prediction(sess)
+    
     writer.close()
