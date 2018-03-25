@@ -1,7 +1,8 @@
 import tensorflow as tf
 
 SESSION_CONFIG = tf.ConfigProto(
-    log_device_placement=True
+    log_device_placement=True,
+    allow_soft_placement=False
 )
 
 JOB_NAME = 'spdz'
@@ -26,4 +27,6 @@ CLUSTER = tf.train.ClusterSpec({
     JOB_NAME: HOSTS
 })
 
-TENSORBOARD_DIR = '/tmp/tensorflow'
+TENSORBOARD_DIR = '/tmp/tensorboard'
+
+session = lambda: tf.Session(MASTER, config=SESSION_CONFIG)

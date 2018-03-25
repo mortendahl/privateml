@@ -7,6 +7,7 @@
 # - better cache strategy?
 # - does it make sense to cache additions, subtractions, etc as well?
 # - make truncation optional; should work even with cached results
+# - lazy mods
 
 from functools import reduce
 from math import log
@@ -119,7 +120,7 @@ def crt_sub(x, y):
 
 def crt_scale(x, k):
     with tf.name_scope("crt_scale"):
-        return [ (xi * k) % mi for xi, mi in zip(x, m) ]
+        return [ (xi * ki) % mi for xi, ki, mi in zip(x, k, m) ]
 
 def crt_mul(x, y):
     with tf.name_scope("crt_mul"):
@@ -175,7 +176,7 @@ def reconstruct(share0, share1):
 
 cached_results = dict()
 
-class PrivateVariable:
+class PrivateTensor(object):
     
     def __init__(self, share0, share1):
         self.share0 = share0
@@ -200,9 +201,46 @@ class PrivateVariable:
     def truncate(x):
         return truncate(x)
 
+def transpose(x):
+    assert isinstance(x, PrivateTensor)
+
+    x0, x1 = x.share0, x.share1
+
+    with tf.name_scope('transpose'):
+
+        with tf.device(SERVER_0):
+            x0_t = [ tf.transpose(t) for t in x0 ]
+
+        with tf.device(SERVER_1):
+            x1_t = [ tf.transpose(t) for t in x1 ]
+
+    x_t = PrivateTensor(x0_t, x1_t)
+
+    x_masked = cached_results.get(('mask', x), None)
+    if x_masked:
+        # use mask for `x` to get mask for `y`
+
+        (a, a0, a1, alpha_on_0, alpha_on_1) = x_masked
+
+        with tf.device(CRYPTO_PRODUCER):
+            a_t = [ tf.transpose(t) for t in a ]
+
+        with tf.device(SERVER_0):
+            a0_t = [ tf.transpose(t) for t in a0 ]
+            alpha_on_0_t = [ tf.transpose(t) for t in alpha_on_0 ]
+
+        with tf.device(SERVER_1):
+            a1_t = [ tf.transpose(t) for t in a1 ]
+            alpha_on_1_t = [ tf.transpose(t) for t in alpha_on_1 ]
+
+        x_masked_t = (a_t, a0_t, a1_t, alpha_on_0_t, alpha_on_1_t)
+        cached_results[('mask', x_t)] = x_masked_t
+
+    return x_t
+
 def add(x, y):
-    assert isinstance(x, PrivateVariable)
-    assert isinstance(y, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
+    assert isinstance(y, PrivateTensor)
     
     cache_key = ('add', x, y)
     z = cached_results.get(cache_key, None)
@@ -220,14 +258,14 @@ def add(x, y):
             with tf.device(SERVER_1):
                 z1 = crt_add(x1, y1)
 
-        z = PrivateVariable(z0, z1)
+        z = PrivateTensor(z0, z1)
         cached_results[cache_key] = z
 
     return z
 
 def sub(x, y):
-    assert isinstance(x, PrivateVariable)
-    assert isinstance(y, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
+    assert isinstance(y, PrivateTensor)
     
     cache_key = ('sub', x, y)
     z = cached_results.get(cache_key, None)
@@ -245,13 +283,41 @@ def sub(x, y):
             with tf.device(SERVER_1):
                 z1 = crt_sub(x1, y1)
 
-        z = PrivateVariable(z0, z1)
+        z = PrivateTensor(z0, z1)
         cached_results[cache_key] = z
 
     return z
 
+def scale(x, k, apply_encoding=None):
+    assert isinstance(x, PrivateTensor)
+    assert type(k) in [int, float]
+
+    x0, x1 = x.share0, x.share1
+
+    if apply_encoding is None:
+        # determine automatically
+        apply_encoding = type(k) is float
+
+    c = np.array([k])
+    if apply_encoding: c = encode(c)
+    c = decompose(c)
+
+    with tf.name_scope('scale'):
+
+        with tf.device(SERVER_0):
+            y0 = crt_scale(x0, c)
+
+        with tf.device(SERVER_1):
+            y1 = crt_scale(x1, c)
+
+    y = PrivateTensor(y0, y1)
+    if apply_encoding:
+        y = truncate(y)
+
+    return y
+
 def mask(x):
-    assert isinstance(x, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
     
     cache_key = ('mask', x)
     masked = cached_results.get(cache_key, None)
@@ -289,7 +355,7 @@ def mask(x):
     return masked
 
 def square(x):
-    assert isinstance(x, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
 
     cache_key = ('square', x)
     y = cached_results.get(cache_key, None)
@@ -317,15 +383,15 @@ def square(x):
                      crt_add(crt_mul(a1, alpha),
                              crt_mul(alpha, a1))) # TODO replace with `scale(, 2)` op
         
-        y = PrivateVariable(y0, y1)
+        y = PrivateTensor(y0, y1)
         y = truncate(y)
         cached_results[cache_key] = y
 
     return y
 
 def mul(x, y):
-    assert isinstance(x, PrivateVariable)
-    assert isinstance(y, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
+    assert isinstance(y, PrivateTensor)
 
     cache_key = ('mul', x, y)
     z = cached_results.get(cache_key, None)
@@ -356,15 +422,15 @@ def mul(x, y):
                      crt_add(crt_mul(a1, beta),
                              crt_mul(alpha, b1)))
         
-        z = PrivateVariable(z0, z1)
+        z = PrivateTensor(z0, z1)
         z = truncate(z)
         cached_results[cache_key] = z
 
     return z
 
 def dot(x, y):
-    assert isinstance(x, PrivateVariable)
-    assert isinstance(y, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
+    assert isinstance(y, PrivateTensor)
 
     cache_key = ('dot', x, y)
     z = cached_results.get(cache_key, None)
@@ -395,7 +461,7 @@ def dot(x, y):
                      crt_add(crt_dot(a1, beta),
                              crt_dot(alpha, b1)))
 
-        z = PrivateVariable(z0, z1)
+        z = PrivateTensor(z0, z1)
         z = truncate(z)
         cached_results[cache_key] = z
 
@@ -413,7 +479,7 @@ def gen_truncate():
         return crt_mul(y, K_inv)
 
     def truncate(x):
-        assert isinstance(x, PrivateVariable)
+        assert isinstance(x, PrivateTensor)
 
         x0, x1 = x.share0, x.share1
 
@@ -425,34 +491,109 @@ def gen_truncate():
             with tf.device(SERVER_1):
                 y1 = crt_sub(M_wrapped, raw_truncate(crt_sub(M_wrapped, x1)))
 
-        return PrivateVariable(y0, y1)
+        return PrivateTensor(y0, y1)
 
     return truncate
 
 truncate = gen_truncate()
+
+def sigmoid(x):
+    assert isinstance(x, PrivateTensor)
+
+    w0 =  0.5
+    w1 =  0.2159198015
+    w3 = -0.0082176259
+    w5 =  0.0001825597
+    w7 = -0.0000018848
+    w9 =  0.0000000072
+
+    with tf.name_scope('sigmoid'):
+
+        # TODO optimise depth
+        x2 = square(x)
+        x3 = mul(x2, x)
+        x5 = mul(x2, x3)
+        x7 = mul(x2, x5)
+        x9 = mul(x2, x7)
+
+        y1 = scale(x,  w1)
+        y3 = scale(x3, w3)
+        y5 = scale(x5, w5)
+        y7 = scale(x7, w7)
+        y9 = scale(x9, w9)
+
+        with tf.device(SERVER_0):
+            z0 = crt_add(y1.share0,
+                 crt_add(y3.share0,
+                 crt_add(y5.share0,
+                 crt_add(y7.share0,
+                 crt_add(y9.share0,
+                         decompose(encode(np.array([w0]))))))))
+
+        with tf.device(SERVER_1):
+            z1 = crt_add(y1.share1,
+                 crt_add(y3.share1,
+                 crt_add(y5.share1,
+                 crt_add(y7.share1,
+                         y9.share1))))
+
+    z = PrivateTensor(z0, z1)
+    return z
 
 def define_input(shape):
     
     with tf.name_scope("input"):
         
         with tf.device(INPUT_PROVIDER):
-            input_x = [ tf.placeholder(INT_TYPE, shape=shape) for _ in range(len(m)) ]
+            input_x = [ tf.placeholder(INT_TYPE, shape=shape) for _ in m ]
             x0, x1 = share(input_x)
         
-    return input_x, PrivateVariable(x0, x1)
+    return input_x, PrivateTensor(x0, x1)
 
-def define_variable(shape):
+# TODO implement this better
+def define_variable(initial_value, apply_encoding=True):
     
-    with tf.device(SERVER_0):
-        x0 = [ tf.Variable(tf.ones(shape=shape, dtype=INT_TYPE)) for _ in range(len(m)) ]
+    v = initial_value
+    v = encode(v) if apply_encoding else v
+    v = decompose(v)
 
-    with tf.device(SERVER_1):
-        x1 = [ tf.Variable(tf.ones(shape=shape, dtype=INT_TYPE)) for _ in range(len(m)) ]
-        
-    return PrivateVariable(x0, x1)
+    with tf.name_scope("var"):
+
+        with tf.device(INPUT_PROVIDER):
+            v0, v1 = share(v)
+
+        with tf.device(SERVER_0):
+            x0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in v0 ]
+
+        with tf.device(SERVER_1):
+            x1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in v1 ]
+
+        x = PrivateTensor(x0, x1)
+
+    init_op = [ v.initializer for v in x0 ] + \
+              [ v.initializer for v in x1 ]
+
+    return init_op, x
+
+def assign(x, v):
+    assert isinstance(x, PrivateTensor)
+    assert isinstance(v, PrivateTensor)
+
+    x0, x1 = x.share0, x.share1
+    v0, v1 = v.share0, v.share1
+
+    with tf.name_scope("assign"):
+
+        with tf.device(SERVER_0):
+            y0 = [ tf.assign(xi, vi) for xi, vi in zip(x0, v0) ]
+
+        with tf.device(SERVER_1):
+            y1 = [ tf.assign(xi, vi) for xi, vi in zip(x1, v1) ]
+
+    return y0, y1
 
 def reveal(x):
-    assert isinstance(x, PrivateVariable)
+    assert isinstance(x, PrivateTensor)
     
     x0, x1 = x.share0, x.share1
 
