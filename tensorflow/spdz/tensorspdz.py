@@ -214,27 +214,27 @@ def transpose(x):
         with tf.device(SERVER_1):
             x1_t = [ tf.transpose(t) for t in x1 ]
 
-    x_t = PrivateTensor(x0_t, x1_t)
+        x_t = PrivateTensor(x0_t, x1_t)
 
-    x_masked = cached_results.get(('mask', x), None)
-    if x_masked:
-        # use mask for `x` to get mask for `y`
+        x_masked = cached_results.get(('mask', x), None)
+        if x_masked:
+            # use mask for `x` to get mask for `y`
 
-        (a, a0, a1, alpha_on_0, alpha_on_1) = x_masked
+            (a, a0, a1, alpha_on_0, alpha_on_1) = x_masked
 
-        with tf.device(CRYPTO_PRODUCER):
-            a_t = [ tf.transpose(t) for t in a ]
+            with tf.device(CRYPTO_PRODUCER):
+                a_t = [ tf.transpose(t) for t in a ]
 
-        with tf.device(SERVER_0):
-            a0_t = [ tf.transpose(t) for t in a0 ]
-            alpha_on_0_t = [ tf.transpose(t) for t in alpha_on_0 ]
+            with tf.device(SERVER_0):
+                a0_t = [ tf.transpose(t) for t in a0 ]
+                alpha_on_0_t = [ tf.transpose(t) for t in alpha_on_0 ]
 
-        with tf.device(SERVER_1):
-            a1_t = [ tf.transpose(t) for t in a1 ]
-            alpha_on_1_t = [ tf.transpose(t) for t in alpha_on_1 ]
+            with tf.device(SERVER_1):
+                a1_t = [ tf.transpose(t) for t in a1 ]
+                alpha_on_1_t = [ tf.transpose(t) for t in alpha_on_1 ]
 
-        x_masked_t = (a_t, a0_t, a1_t, alpha_on_0_t, alpha_on_1_t)
-        cached_results[('mask', x_t)] = x_masked_t
+            x_masked_t = (a_t, a0_t, a1_t, alpha_on_0_t, alpha_on_1_t)
+            cached_results[('mask', x_t)] = x_masked_t
 
     return x_t
 
