@@ -27,3 +27,5 @@ CLUSTER = tf.train.ClusterSpec({
 })
 
 TENSORBOARD_DIR = '/tmp/tensorboard'
+
+session = lambda: tf.Session(MASTER, config=SESSION_CONFIG)
