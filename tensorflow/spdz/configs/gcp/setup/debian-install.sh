@@ -23,6 +23,4 @@ git clone https://github.com/mortendahl/privateml.git
 ln -s ~/privateml/tensorflow/spdz/tensorspdz.py ~/tensorspdz.py
 ln -s ~/privateml/tensorflow/spdz/configs/gcp/server/config.py ~/config.py
 ln -s ~/privateml/tensorflow/spdz/configs/gcp/server/role.py ~/role.py
-ln -s ~/privateml/tensorflow/spdz/configs/gcp/server/pull.sh ~/pull.sh
 ln -s ~/privateml/tensorflow/spdz/configs/gcp/server/monitor.sh ~/monitor.sh
-ln -s ~/privateml/tensorflow/spdz/configs/gcp/server/tensorboard.sh ~/tensorboard.sh
