@@ -3,4 +3,4 @@
 rm -r /tmp/tensorboard
 rm *.pyc
 
-python2 main.py
+python2 $1

@@ -5,7 +5,8 @@ import os
 HOSTS_FILE = '/tmp/hosts.json'
 
 SESSION_CONFIG = tf.ConfigProto(
-    log_device_placement=True
+    log_device_placement=True,
+    allow_soft_placement=False
 )
 
 JOB_NAME = 'spdz'

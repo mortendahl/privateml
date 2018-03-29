@@ -7,7 +7,7 @@ INPUT_PROVIDER  = '/device:CPU:3'
 OUTPUT_RECEIVER = '/device:CPU:4'
 
 SESSION_CONFIG = tf.ConfigProto(
-    log_device_placement=True,
+    log_device_placement=False,
     device_count={"CPU": 5},
     inter_op_parallelism_threads=1,
     intra_op_parallelism_threads=1

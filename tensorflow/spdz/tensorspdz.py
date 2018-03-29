@@ -1,5 +1,6 @@
 
 # TODOs:
+# - use TensorArray as training buffers instead of FIFOQueue
 # - recombine without blowing up numbers (should fit in 64bit word)
 # - gradient computation + SGD
 # - compare performance if native type is float64 instead of int64
@@ -174,7 +175,7 @@ def reconstruct(share0, share1):
     with tf.name_scope("reconstruct"):
         return crt_add(share0, share1)
 
-cached_results = dict()
+nodes = dict()
 
 class PrivateTensor(object):
     
@@ -216,7 +217,7 @@ def transpose(x):
 
         x_t = PrivateTensor(x0_t, x1_t)
 
-        x_masked = cached_results.get(('mask', x), None)
+        x_masked = nodes.get(('mask', x), None)
         if x_masked:
             # use mask for `x` to get mask for `y`
 
@@ -234,7 +235,7 @@ def transpose(x):
                 alpha_on_1_t = [ tf.transpose(t) for t in alpha_on_1 ]
 
             x_masked_t = (a_t, a0_t, a1_t, alpha_on_0_t, alpha_on_1_t)
-            cached_results[('mask', x_t)] = x_masked_t
+            nodes[('mask', x_t)] = x_masked_t
 
     return x_t
 
@@ -242,8 +243,8 @@ def add(x, y):
     assert isinstance(x, PrivateTensor)
     assert isinstance(y, PrivateTensor)
     
-    cache_key = ('add', x, y)
-    z = cached_results.get(cache_key, None)
+    node_key = ('add', x, y)
+    z = nodes.get(node_key, None)
 
     if z is None:
 
@@ -259,7 +260,7 @@ def add(x, y):
                 z1 = crt_add(x1, y1)
 
         z = PrivateTensor(z0, z1)
-        cached_results[cache_key] = z
+        nodes[node_key] = z
 
     return z
 
@@ -267,8 +268,8 @@ def sub(x, y):
     assert isinstance(x, PrivateTensor)
     assert isinstance(y, PrivateTensor)
     
-    cache_key = ('sub', x, y)
-    z = cached_results.get(cache_key, None)
+    node_key = ('sub', x, y)
+    z = nodes.get(node_key, None)
 
     if z is None:
 
@@ -284,7 +285,7 @@ def sub(x, y):
                 z1 = crt_sub(x1, y1)
 
         z = PrivateTensor(z0, z1)
-        cached_results[cache_key] = z
+        nodes[node_key] = z
 
     return z
 
@@ -319,15 +320,15 @@ def scale(x, k, apply_encoding=None):
 def mask(x):
     assert isinstance(x, PrivateTensor)
     
-    cache_key = ('mask', x)
-    masked = cached_results.get(cache_key, None)
+    node_key = ('mask', x)
+    masked = nodes.get(node_key, None)
 
     if masked is None:
       
         x0, x1 = x.share0, x.share1
         shape = x.shape
       
-        with tf.name_scope("mask"):
+        with tf.name_scope('mask'):
 
             with tf.device(CRYPTO_PRODUCER):
                 a = sample(shape)
@@ -350,15 +351,15 @@ def mask(x):
                 alpha_on_1 = alpha
 
         masked = (a, a0, a1, alpha_on_0, alpha_on_1)
-        cached_results[cache_key] = masked
+        nodes[node_key] = masked
         
     return masked
 
 def square(x):
     assert isinstance(x, PrivateTensor)
 
-    cache_key = ('square', x)
-    y = cached_results.get(cache_key, None)
+    node_key = ('square', x)
+    y = nodes.get(node_key, None)
 
     if y is None:
 
@@ -385,7 +386,7 @@ def square(x):
         
         y = PrivateTensor(y0, y1)
         y = truncate(y)
-        cached_results[cache_key] = y
+        nodes[node_key] = y
 
     return y
 
@@ -393,8 +394,8 @@ def mul(x, y):
     assert isinstance(x, PrivateTensor)
     assert isinstance(y, PrivateTensor)
 
-    cache_key = ('mul', x, y)
-    z = cached_results.get(cache_key, None)
+    node_key = ('mul', x, y)
+    z = nodes.get(node_key, None)
 
     if z is None:
 
@@ -424,7 +425,7 @@ def mul(x, y):
         
         z = PrivateTensor(z0, z1)
         z = truncate(z)
-        cached_results[cache_key] = z
+        nodes[node_key] = z
 
     return z
 
@@ -432,8 +433,8 @@ def dot(x, y):
     assert isinstance(x, PrivateTensor)
     assert isinstance(y, PrivateTensor)
 
-    cache_key = ('dot', x, y)
-    z = cached_results.get(cache_key, None)
+    node_key = ('dot', x, y)
+    z = nodes.get(node_key, None)
 
     if z is None:
 
@@ -463,7 +464,7 @@ def dot(x, y):
 
         z = PrivateTensor(z0, z1)
         z = truncate(z)
-        cached_results[cache_key] = z
+        nodes[node_key] = z
 
     return z
 
@@ -540,9 +541,9 @@ def sigmoid(x):
     z = PrivateTensor(z0, z1)
     return z
 
-def define_input(shape):
+def define_input(shape, name=None):
     
-    with tf.name_scope("input"):
+    with tf.name_scope('input{}'.format('-'+name if name else '')):
         
         with tf.device(INPUT_PROVIDER):
             input_x = [ tf.placeholder(INT_TYPE, shape=shape) for _ in m ]
@@ -551,13 +552,13 @@ def define_input(shape):
     return input_x, PrivateTensor(x0, x1)
 
 # TODO implement this better
-def define_variable(initial_value, apply_encoding=True):
+def define_variable(initial_value, apply_encoding=True, name=None):
     
     v = initial_value
     v = encode(v) if apply_encoding else v
     v = decompose(v)
 
-    with tf.name_scope("var"):
+    with tf.name_scope('var{}'.format('-'+name if name else '')):
 
         with tf.device(INPUT_PROVIDER):
             v0, v1 = share(v)

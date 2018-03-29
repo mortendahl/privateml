@@ -21,6 +21,7 @@ input_z, z = define_input((100,100))
 
 # Computation
 # v = reveal(dot(x, y) + dot(x, z))
+# v = reveal(square(x) + square(y) + square(z))
 v = reveal(square(x))
 
 # Actual inputs
@@ -74,6 +75,7 @@ with tf.Session(MASTER, config=SESSION_CONFIG) as sess:
 V = decode(recombine(res))
 
 # expected = np.dot(X, Y) + np.dot(X, Z)
+# expected = X * X + Y * Y + Z * Z
 expected = X * X
 actual   = V
 diff = expected - actual

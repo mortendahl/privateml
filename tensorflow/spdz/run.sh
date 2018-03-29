@@ -1,0 +1,1 @@
+configs/gcp/run.sh

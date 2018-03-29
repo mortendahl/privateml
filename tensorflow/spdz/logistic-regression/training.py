@@ -2,8 +2,8 @@
 
 # hack to import tensorspdz from parent directory
 # - https://stackoverflow.com/questions/714063/importing-modules-from-parent-folder
-# import sys, os
-# sys.path.insert(1, os.path.join(sys.path[0], '..'))
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 
 from datetime import datetime
@@ -90,6 +90,8 @@ def public_training():
 
     return w
 
+public_training()
+
 ##############################
 #      Private training      #
 ##############################
@@ -161,13 +163,14 @@ def distribute_batch(shape, buffer, varname):
 
         input_x = [ tf.placeholder(INT_TYPE, shape=shape) for _ in m ]
 
-        # share x
-        x0, x1 = share(input_x)
-        
-        # precompute mask
-        a = sample(shape)
-        a0, a1 = share(a)
-        alpha = crt_sub(input_x, a)
+        with tf.device(INPUT_PROVIDER):
+            with tf.name_scope('preprocess'):
+                # share x
+                x0, x1 = share(input_x)
+                # precompute mask
+                a = sample(shape)
+                a0, a1 = share(a)
+                alpha = crt_sub(input_x, a)
 
         with tf.device(SERVER_0):
             enqueue_0 = queue_0.enqueue(pack_server([x0, a0, alpha]))
@@ -203,8 +206,8 @@ def load_batch(shape, buffer, varname):
 
     x = PrivateTensor(x0, x1)
     
-    cache_key = ('mask', x)
-    cached_results[cache_key] = (a, a0, a1, alpha_on_0, alpha_on_1)
+    node_key = ('mask', x)
+    nodes[node_key] = (a, a0, a1, alpha_on_0, alpha_on_1)
 
     return x
 
@@ -328,14 +331,11 @@ with session() as sess:
         writer.add_run_metadata(run_metadata, 'distribute-y-{}'.format(batch_index))
 
     print 'Training...'
-    # start = datetime.now()
     w0, w1 = sess.run(
         training,
         options=run_options,
         run_metadata=run_metadata
     )
-    # end = datetime.now()
-    # print end-start
     writer.add_run_metadata(run_metadata, 'train')
     chrome_trace = timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format()
     with open('{}/{}.ctr.json'.format(TENSORBOARD_DIR, 'train'), 'w') as f:
