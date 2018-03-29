@@ -9,6 +9,7 @@
 # - does it make sense to cache additions, subtractions, etc as well?
 # - make truncation optional; should work even with cached results
 # - lazy mods
+# - sigmoid() is showing some unused substructures in TensorBoard; why?
 
 from functools import reduce
 from math import log
