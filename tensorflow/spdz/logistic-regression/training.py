@@ -260,39 +260,39 @@ training = training_loop(
 #     Private prediction     #
 ##############################
 
-def private_prediction(sess, w):
+# def private_prediction(sess, w):
 
-    INPUT_SIZE = 300
+#     INPUT_SIZE = 300
 
-    input_x, x = define_input((INPUT_SIZE,3))
+#     input_x, x = define_input((INPUT_SIZE,3))
     
-    y = reveal(sigmoid(dot(x, w)))
+#     y = reveal(sigmoid(dot(x, w)))
 
-    writer = tf.summary.FileWriter(TENSORBOARD_DIR, sess.graph)
-    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-    run_metadata = tf.RunMetadata()
+#     writer = tf.summary.FileWriter(TENSORBOARD_DIR, sess.graph)
+#     run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+#     run_metadata = tf.RunMetadata()
 
-    for i in range(10):
+#     for i in range(10):
 
-        Y = sess.run(
-            y,
-            feed_dict=dict(
-                [ (xi, Xi) for xi, Xi in zip(input_x, decompose(encode(X[i:i+INPUT_SIZE].reshape(INPUT_SIZE,3)))) ]
-            ),
-            options=run_options,
-            run_metadata=run_metadata
-        )
-        # print decode(recombine(Y))
+#         Y = sess.run(
+#             y,
+#             feed_dict=dict(
+#                 [ (xi, Xi) for xi, Xi in zip(input_x, decompose(encode(X[i:i+INPUT_SIZE].reshape(INPUT_SIZE,3)))) ]
+#             ),
+#             options=run_options,
+#             run_metadata=run_metadata
+#         )
+#         # print decode(recombine(Y))
 
-        writer.add_run_metadata(run_metadata, 'prediction-{}'.format(i))
+#         writer.add_run_metadata(run_metadata, 'prediction-{}'.format(i))
 
-        chrome_trace = timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format()
-        with open('{}/{}.ctr.json'.format(TENSORBOARD_DIR, 'prediction-{}'.format(i)), 'w') as f:
-            f.write(chrome_trace)
+#         chrome_trace = timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format()
+#         with open('{}/{}.ctr.json'.format(TENSORBOARD_DIR, 'prediction-{}'.format(i)), 'w') as f:
+#             f.write(chrome_trace)
 
-    writer.close()
+#     writer.close()
 
-    return Y
+#     return Y
 
 ##############################
 #            Run             #
@@ -306,9 +306,6 @@ with session() as sess:
 
     print 'Distributing...'
     for batch_index, (batch_x, batch_y) in enumerate(zip(batches_x, batches_y)):
-
-        if batch_index >= 5:
-            break
 
         sess.run(
             distribute_x,
