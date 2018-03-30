@@ -17,7 +17,7 @@ This example is divided into two depending on whether training is done publicly 
 To do public training and private prediction simply run:
 
 ```sh
-spdz $ ./run.sh logistic-regression/prediction.py
+spdz $ ./run.sh logistic-regression-simple/prediction.py
 ```
 
 which will first train on a public model, privately distribute the trained parameters to the two servers, and finally make a prediction on a private input so that the two servers know neither the parameters nor the input.
@@ -25,7 +25,7 @@ which will first train on a public model, privately distribute the trained param
 To do both private training and prediction simply run:
 
 ```sh
-spdz $ ./run.sh logistic-regression/training.py
+spdz $ ./run.sh logistic-regression-simple/training.py
 ```
 
 which of course will take longer.
