@@ -434,39 +434,50 @@ def dot(x, y):
     assert isinstance(x, PrivateTensor)
     assert isinstance(y, PrivateTensor)
 
-    node_key = ('dot', x, y)
-    z = nodes.get(node_key, None)
+    x0, x1 = x.share0, x.share1
+    y0, y1 = y.share0, y.share1
 
-    if z is None:
+    with tf.name_scope('dot'):
 
-        a, a0, a1, alpha_on_0, alpha_on_1 = mask(x)
-        b, b0, b1,  beta_on_0,  beta_on_1 = mask(y)
+        # triple generation
 
-        with tf.name_scope("dot"):
+        with tf.device(CRYPTO_PRODUCER):
+            a = sample(x.shape)
+            b = sample(y.shape)
+            ab = crt_dot(a, b)
+            a0, a1 = share(a)
+            b0, b1 = share(b)
+            ab0, ab1 = share(ab)
+        
+        # masking after distributing the triple
+        
+        with tf.device(SERVER_0):
+            alpha0 = crt_sub(x0, a0)
+            beta0  = crt_sub(y0, b0)
 
-            with tf.device(CRYPTO_PRODUCER):
-                ab = crt_dot(a, b)
-                ab0, ab1 = share(ab)
+        with tf.device(SERVER_1):
+            alpha1 = crt_sub(x1, a1)
+            beta1  = crt_sub(y1, b1)
 
-            with tf.device(SERVER_0):
-                alpha = alpha_on_0
-                beta = beta_on_0
-                z0 = crt_add(ab0,
-                     crt_add(crt_dot(a0, beta),
-                     crt_add(crt_dot(alpha, b0),
-                             crt_dot(alpha, beta))))
+        # recombination after exchanging alphas and betas
 
-            with tf.device(SERVER_1):
-                alpha = alpha_on_1
-                beta = beta_on_1
-                z1 = crt_add(ab1,
-                     crt_add(crt_dot(a1, beta),
-                             crt_dot(alpha, b1)))
+        with tf.device(SERVER_0):
+            alpha = reconstruct(alpha0, alpha1)
+            beta  = reconstruct(beta0, beta1)
+            z0 = crt_add(ab0,
+                 crt_add(crt_dot(a0, beta),
+                 crt_add(crt_dot(alpha, b0),
+                         crt_dot(alpha, beta))))
 
-        z = PrivateTensor(z0, z1)
-        z = truncate(z)
-        nodes[node_key] = z
-
+        with tf.device(SERVER_1):
+            alpha = reconstruct(alpha0, alpha1)
+            beta  = reconstruct(beta0, beta1)
+            z1 = crt_add(ab1,
+                 crt_add(crt_dot(a1, beta),
+                         crt_dot(alpha, b1)))
+        
+    z = PrivateTensor(z0, z1)
+    z = truncate(z)
     return z
 
 def gen_truncate():
