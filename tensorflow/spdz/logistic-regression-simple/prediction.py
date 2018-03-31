@@ -107,6 +107,15 @@ print public_prediction(X[:10])
 #     Private prediction     #
 ##############################
 
+# def prepare_input(inputs):
+#     for input, tensor:
+#         dict(
+#             (input_xi, Xi) for input_xi, Xi in zip(input_x, decompose(encode(X)))
+#         )
+
+# def decode_output(output):
+#   return decode(recombine(output))
+
 def setup_private_prediction(W, B, shape_X=(1,2)):
 
     input_x, x = define_input(shape_X, name='x')
@@ -156,6 +165,7 @@ def setup_private_prediction(W, B, shape_X=(1,2)):
 
     return private_prediction
 
-private_prediction = setup_private_prediction(W, B, shape_X=(10,2))
+private_input = X[:10]
+private_prediction = setup_private_prediction(W, B, shape_X=private_input.shape)
 
-print private_prediction(X[:10])
+print private_prediction(private_input)
