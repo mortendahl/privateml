@@ -384,10 +384,10 @@ def cache(x):
             with tf.name_scope('cache'):
 
                 with tf.device(SERVER_0):
-                    cached_x0 = [ tf.Variable(vi.initialized_value(), dtype=INT_TYPE) for vi in x0 ]
+                    cached_x0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in x0 ]
 
                 with tf.device(SERVER_1):
-                    cached_x1 = [ tf.Variable(vi.initialized_value(), dtype=INT_TYPE) for vi in x1 ]
+                    cached_x1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in x1 ]
 
             cached = PrivateTensor(cached_x0, cached_x1)
             nodes[node_key] = cached
@@ -399,15 +399,15 @@ def cache(x):
             with tf.name_scope('cache'):
 
                 with tf.device(CRYPTO_PRODUCER):
-                    cached_a = [ tf.Variable(vi.initialized_value(), dtype=INT_TYPE) for vi in a ]
+                    cached_a = [ tf.Variable(vi, dtype=INT_TYPE) for vi in a ]
 
                 with tf.device(SERVER_0):
                     cached_a0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in a0 ]
-                    cached_alpha_on_0 = [ tf.Variable(vi.initialized_value(), dtype=INT_TYPE) for vi in alpha_on_0 ]
+                    cached_alpha_on_0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in alpha_on_0 ]
 
                 with tf.device(SERVER_1):
                     cached_a1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in a1 ]
-                    cached_alpha_on_1 = [ tf.Variable(vi.initialized_value(), dtype=INT_TYPE) for vi in alpha_on_1 ]
+                    cached_alpha_on_1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in alpha_on_1 ]
 
             cached = MaskedPrivateTensor(
                 cached_a,
