@@ -203,6 +203,19 @@ class PrivateTensor(object):
     def truncate(x):
         return truncate(x)
 
+class MaskedPrivateTensor(object):
+
+    def __init__(self, a, a0, a1, alpha_on_0, alpha_on_1):
+        self.a  = a
+        self.a0 = a0
+        self.a1 = a1
+        self.alpha_on_0 = alpha_on_0
+        self.alpha_on_1 = alpha_on_1
+
+    @property
+    def unwrapped(self):
+        return self.a, self.a0, self.a1, self.alpha_on_0, self.alpha_on_1
+
 def transpose(x):
     assert isinstance(x, PrivateTensor)
 
@@ -222,6 +235,7 @@ def transpose(x):
         if x_masked:
             # use mask for `x` to get mask for `y`
 
+            # TODO: use MaskedPrivateTensor
             (a, a0, a1, alpha_on_0, alpha_on_1) = x_masked
 
             with tf.device(CRYPTO_PRODUCER):
@@ -235,7 +249,7 @@ def transpose(x):
                 a1_t = [ tf.transpose(t) for t in a1 ]
                 alpha_on_1_t = [ tf.transpose(t) for t in alpha_on_1 ]
 
-            x_masked_t = (a_t, a0_t, a1_t, alpha_on_0_t, alpha_on_1_t)
+            x_masked_t = MaskedPrivateTensor(a_t, a0_t, a1_t, alpha_on_0_t, alpha_on_1_t)
             nodes[('mask', x_t)] = x_masked_t
 
     return x_t
@@ -318,7 +332,7 @@ def scale(x, k, apply_encoding=None):
 
     return y
 
-def mask(x, fixed=False):
+def mask(x):
     assert isinstance(x, PrivateTensor)
     
     node_key = ('mask', x)
@@ -351,22 +365,78 @@ def mask(x, fixed=False):
                 alpha = reconstruct(alpha0, alpha1)
                 alpha_on_1 = alpha
 
-        masked = (a, a0, a1, alpha_on_0, alpha_on_1)
+        masked = MaskedPrivateTensor(a, a0, a1, alpha_on_0, alpha_on_1)
         nodes[node_key] = masked
         
     return masked
 
+def cache(x):
+
+    node_key = ('cache', x)
+    cached = nodes.get(node_key, None)
+
+    if cached is None:
+
+        if isinstance(x, PrivateTensor):
+
+            x0, x1 = x.share0, x.share1
+
+            with tf.name_scope('cache'):
+
+                with tf.device(SERVER_0):
+                    cached_x0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in x0 ]
+
+                with tf.device(SERVER_1):
+                    cached_x1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in x1 ]
+
+            cached = PrivateTensor(cached_x0, cached_x1)
+            nodes[node_key] = cached
+
+        elif isinstance(x, MaskedPrivateTensor):
+
+            a, a0, a1, alpha_on_0, alpha_on_1 = x.unwrapped
+
+            with tf.name_scope('cache'):
+
+                with tf.device(CRYPTO_PRODUCER):
+                    cached_a = [ tf.Variable(vi, dtype=INT_TYPE) for vi in a ]
+
+                with tf.device(SERVER_0):
+                    cached_a0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in a0 ]
+                    cached_alpha_on_0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in alpha_on_0 ]
+
+                with tf.device(SERVER_1):
+                    cached_a1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in a1 ]
+                    cached_alpha_on_1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in alpha_on_1 ]
+
+            cached = MaskedPrivateTensor(
+                cached_a,
+                cached_a0,
+                cached_a1,
+                cached_alpha_on_0,
+                cached_alpha_on_1
+            )
+            nodes[node_key] = cached
+
+        else:
+            raise AssertionError("'x' not of supported type")
+
+    return cached
+
 def square(x):
-    assert isinstance(x, PrivateTensor)
 
     node_key = ('square', x)
     y = nodes.get(node_key, None)
 
     if y is None:
 
-        a, a0, a1, alpha_on_0, alpha_on_1 = mask(x)
+        if isinstance(x, PrivateTensor):
+            x = mask(x)
 
-        with tf.name_scope("square"):
+        assert isinstance(x, MaskedPrivateTensor)
+        a, a0, a1, alpha_on_0, alpha_on_1 = x.unwrapped
+
+        with tf.name_scope('square'):
 
             with tf.device(CRYPTO_PRODUCER):
                 aa = crt_mul(a, a)
@@ -392,16 +462,23 @@ def square(x):
     return y
 
 def mul(x, y):
-    assert isinstance(x, PrivateTensor)
-    assert isinstance(y, PrivateTensor)
 
     node_key = ('mul', x, y)
     z = nodes.get(node_key, None)
 
     if z is None:
 
-        a, a0, a1, alpha_on_0, alpha_on_1 = mask(x)
-        b, b0, b1,  beta_on_0,  beta_on_1 = mask(y)
+        if isinstance(x, PrivateTensor):
+            x = mask(x)
+
+        if isinstance(y, PrivateTensor):
+            y = mask(y)
+
+        assert isinstance(x, MaskedPrivateTensor)
+        assert isinstance(y, MaskedPrivateTensor)
+
+        a, a0, a1, alpha_on_0, alpha_on_1 = x.unwrapped
+        b, b0, b1,  beta_on_0,  beta_on_1 = y.unwrapped
 
         with tf.name_scope("mul"):
 
@@ -431,16 +508,23 @@ def mul(x, y):
     return z
 
 def dot(x, y):
-    assert isinstance(x, PrivateTensor)
-    assert isinstance(y, PrivateTensor)
 
     node_key = ('dot', x, y)
     z = nodes.get(node_key, None)
 
     if z is None:
 
-        a, a0, a1, alpha_on_0, alpha_on_1 = mask(x)
-        b, b0, b1,  beta_on_0,  beta_on_1 = mask(y)
+        if isinstance(x, PrivateTensor):
+            x = mask(x)
+
+        if isinstance(y, PrivateTensor):
+            y = mask(y)
+
+        assert isinstance(x, MaskedPrivateTensor)
+        assert isinstance(y, MaskedPrivateTensor)
+        
+        a, a0, a1, alpha_on_0, alpha_on_1 = x.unwrapped
+        b, b0, b1,  beta_on_0,  beta_on_1 = y.unwrapped
 
         with tf.name_scope("dot"):
 
@@ -571,9 +655,6 @@ def define_variable(initial_value, apply_encoding=True, name=None):
             x1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in v1 ]
 
         x = PrivateTensor(x0, x1)
-
-    # init_op = [ v.initializer for v in x0 ] + \
-    #           [ v.initializer for v in x1 ]
 
     return x
 

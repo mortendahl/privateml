@@ -120,10 +120,10 @@ def setup_private_prediction(W, B, shape_X=(1,2)):
 
     input_x, x = define_input(shape_X, name='x')
 
-    init_w, w = define_variable(W, name='w')
-    init_b, b = define_variable(B, name='b')
+    w = define_variable(W, name='w')
+    b = define_variable(B, name='b')
 
-    y = sigmoid(add(dot(x, w), b))
+    y = sigmoid(add(dot(x, mask(w)), mask(b)))
 
     def private_prediction(X):
         X = X.reshape(-1, 2)
@@ -141,11 +141,11 @@ def setup_private_prediction(W, B, shape_X=(1,2)):
                     f.write(chrome_trace)
 
             sess.run(
-                [init_w, init_b],
+                tf.global_variables_initializer(),
                 options=run_options,
                 run_metadata=run_metadata
             )
-            write_metadata('setup')
+            write_metadata('setup-1')
 
             for i in range(10):
 
@@ -159,13 +159,25 @@ def setup_private_prediction(W, B, shape_X=(1,2)):
                 )
                 write_metadata('predict-{}'.format(i))
                 
+            sess.run(
+                tf.global_variables_initializer(),
+                options=run_options,
+                run_metadata=run_metadata
+            )
+            write_metadata('setup-2')
+
             writer.close()
 
             return decode(recombine(y_pred))
 
     return private_prediction
 
+# private_input = X[:1]
 private_input = X[:10]
+# private_input = X[:100]
+# private_input = X[:1000]
+# private_input = X
+# private_input = np.concatenate([X]*10)
 private_prediction = setup_private_prediction(W, B, shape_X=private_input.shape)
 
 print private_prediction(private_input)
