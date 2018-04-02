@@ -318,7 +318,7 @@ def scale(x, k, apply_encoding=None):
 
     return y
 
-def mask(x):
+def mask(x, fixed=False):
     assert isinstance(x, PrivateTensor)
     
     node_key = ('mask', x)
@@ -572,10 +572,10 @@ def define_variable(initial_value, apply_encoding=True, name=None):
 
         x = PrivateTensor(x0, x1)
 
-    init_op = [ v.initializer for v in x0 ] + \
-              [ v.initializer for v in x1 ]
+    # init_op = [ v.initializer for v in x0 ] + \
+    #           [ v.initializer for v in x1 ]
 
-    return init_op, x
+    return x
 
 def assign(x, v):
     assert isinstance(x, PrivateTensor)
