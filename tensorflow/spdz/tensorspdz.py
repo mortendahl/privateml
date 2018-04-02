@@ -368,6 +368,8 @@ def mask(x):
         
     return masked
 
+cache_updators = []
+
 def cache(x):
 
     node_key = ('cache', x)
@@ -382,10 +384,12 @@ def cache(x):
             with tf.name_scope('cache'):
 
                 with tf.device(SERVER_0):
-                    cached_x0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in x0 ]
+                    cached_x0 = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(x0, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_x0, x0) ])
 
                 with tf.device(SERVER_1):
-                    cached_x1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in x1 ]
+                    cached_x1 = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(x1, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_x1, x1) ])
 
             cached = PrivateTensor(cached_x0, cached_x1)
             nodes[node_key] = cached
@@ -397,15 +401,22 @@ def cache(x):
             with tf.name_scope('cache'):
 
                 with tf.device(CRYPTO_PRODUCER):
-                    cached_a = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in a ]
+                    cached_a = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(a, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_a, a) ])
 
                 with tf.device(SERVER_0):
-                    cached_a0 = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in a0 ]
-                    cached_alpha_on_0 = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in alpha_on_0 ]
+                    cached_a0 = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(a0, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_a0, a0) ])
+
+                    cached_alpha_on_0 = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(alpha_on_0, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_alpha_on_0, alpha_on_0) ])
 
                 with tf.device(SERVER_1):
-                    cached_a1 = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in a1 ]
-                    cached_alpha_on_1 = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in alpha_on_1 ]
+                    cached_a1 = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(a1, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_a1, a1) ])
+
+                    cached_alpha_on_1 = [ tf.Variable(tf.random_uniform(shape=vi.shape, maxval=mi, dtype=INT_TYPE), dtype=INT_TYPE) for vi, mi in zip(alpha_on_1, m) ]
+                    cache_updators.append([ tf.assign(var, val) for var, val in zip(cached_alpha_on_1, alpha_on_1) ])
 
             cached = MaskedPrivateTensor(
                 cached_a,
@@ -647,10 +658,10 @@ def define_variable(initial_value, apply_encoding=True, name=None):
             v0, v1 = share(v)
 
         with tf.device(SERVER_0):
-            x0 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in v0 ]
+            x0 = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in v0 ]
 
         with tf.device(SERVER_1):
-            x1 = [ tf.Variable(vi, dtype=INT_TYPE) for vi in v1 ]
+            x1 = [ tf.Variable(vi, dtype=INT_TYPE).read_value() for vi in v1 ]
 
         x = PrivateTensor(x0, x1)
 
