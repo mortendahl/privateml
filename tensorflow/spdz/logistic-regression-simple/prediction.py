@@ -20,48 +20,44 @@ np_sigmoid = lambda x: 1 / (1 + np.exp(-x))
 #   Generate training data   #
 ##############################
 
-np.random.seed(42)
+def generate_dataset(size, num_features):
+    assert size % 2 == 0
 
-data_size = 10000
-assert data_size % 2 == 0
+    np.random.seed(42)
 
-X0 = np.random.multivariate_normal([0, 0], [[1, .75],[.75, 1]], data_size//2)
-X1 = np.random.multivariate_normal([1, 4], [[1, .75],[.75, 1]], data_size//2)
-X = np.vstack((X0, X1)).astype(np.float32)
+    # X0 = np.random.multivariate_normal([0, 0], [[1, .75],[.75, 1]], size//2)
+    # X1 = np.random.multivariate_normal([1, 4], [[1, .75],[.75, 1]], size//2)
+    # X = np.vstack((X0, X1)).astype(np.float32)
 
-Y0 = np.zeros(data_size//2).reshape(-1, 1)
-Y1 = np.ones (data_size//2).reshape(-1, 1)
-Y = np.vstack((Y0, Y1)).astype(np.float32)
+    X = np.random.random_sample((size, num_features))
 
-# shuffle
-perm = np.random.permutation(len(X))
-X = X[perm]
-Y = Y[perm]
+    Y0 = np.zeros(size//2).reshape(-1, 1)
+    Y1 = np.ones (size//2).reshape(-1, 1)
+    Y = np.vstack((Y0, Y1)).astype(np.float32)
 
+    # shuffle
+    perm = np.random.permutation(len(X))
+    X = X[perm]
+    Y = Y[perm]
+
+    return X, Y
 
 ##############################
 #       Public training      #
 ##############################
 
-def public_training():
+def public_training(X, Y, batch_size=100, learning_rate=0.01, epochs=10):
 
-    batch_size = 100
+    data_size, num_features = X.shape
     assert data_size % batch_size == 0
+
     num_batches = data_size // batch_size
 
     batches_X = [ X[batch_size*batch_index : batch_size*(batch_index+1)] for batch_index in range(num_batches) ]
     batches_Y = [ Y[batch_size*batch_index : batch_size*(batch_index+1)] for batch_index in range(num_batches) ]
 
-    shape_x = (batch_size,2)
-    shape_y = (batch_size,1)
-    shape_w = (2,1)
-    shape_b = (1,1)
-
-    learning_rate = 0.01
-    epochs = 10
-
-    W = np.zeros(shape_w)
-    B = np.zeros(shape_b)
+    W = np.zeros((num_features, 1))
+    B = np.zeros((1, 1))
 
     for _ in range(epochs):
 
@@ -83,25 +79,17 @@ def public_training():
 
     return W, B
 
-W, B = public_training()
-
-
 ##############################
 #      Public prediction     #
 ##############################
 
-def setup_public_prediction(W, B):
+def setup_public_prediction(W, B, shape_X):
 
     def public_prediction(X):
-        X = X.reshape(-1, 2)
+        X = X.reshape(shape_X)
         return np_sigmoid(np.dot(X, W) + B)
 
     return public_prediction
-
-public_prediction = setup_public_prediction(W, B)
-
-print public_prediction(X[:10])
-
 
 ##############################
 #     Private prediction     #
@@ -116,17 +104,19 @@ print public_prediction(X[:10])
 # def decode_output(output):
 #   return decode(recombine(output))
 
-def setup_private_prediction(W, B, shape_X=(1,2)):
+def setup_private_prediction(W, B, shape_X):
 
     input_x, x = define_input(shape_X, name='x')
 
     w = define_variable(W, name='w')
     b = define_variable(B, name='b')
 
-    y = sigmoid(add(dot(x, mask(w)), mask(b)))
+    # w = cache(mask(w))
+    # b = cache(b)
+    y = sigmoid(add(dot(x, w), b))
 
     def private_prediction(X):
-        X = X.reshape(-1, 2)
+        X = X.reshape(shape_X)
 
         with session() as sess:
 
@@ -145,7 +135,14 @@ def setup_private_prediction(W, B, shape_X=(1,2)):
                 options=run_options,
                 run_metadata=run_metadata
             )
-            write_metadata('setup-1')
+            write_metadata('init')
+
+            sess.run(
+                cache_updators,
+                options=run_options,
+                run_metadata=run_metadata
+            )
+            write_metadata('populate')
 
             for i in range(10):
 
@@ -158,26 +155,36 @@ def setup_private_prediction(W, B, shape_X=(1,2)):
                     run_metadata=run_metadata
                 )
                 write_metadata('predict-{}'.format(i))
-                
-            sess.run(
-                tf.global_variables_initializer(),
-                options=run_options,
-                run_metadata=run_metadata
-            )
-            write_metadata('setup-2')
+
+                y_pred_private = decode(recombine(y_pred))
 
             writer.close()
 
-            return decode(recombine(y_pred))
+            return y_pred_private
 
     return private_prediction
 
+##############################
+#          Running           #
+##############################
+
+X, Y = generate_dataset(10000, 100)
+W, B = public_training(X, Y)
+
 # private_input = X[:1]
-private_input = X[:10]
-# private_input = X[:100]
+# private_input = X[:10]
+private_input = X[:100]
 # private_input = X[:1000]
-# private_input = X
+# private_input = X[:10000]
 # private_input = np.concatenate([X]*10)
+
+public_prediction = setup_public_prediction(W, B, shape_X=private_input.shape)
 private_prediction = setup_private_prediction(W, B, shape_X=private_input.shape)
 
-print private_prediction(private_input)
+y_pred_public = public_prediction(private_input)
+y_pred_private = private_prediction(private_input)
+
+print y_pred_public[:10], len(y_pred_public)
+print y_pred_private[:10], len(y_pred_private)
+
+# assert (abs(y_pred_private - y_pred_public) < 0.05).all(), y_pred_private
