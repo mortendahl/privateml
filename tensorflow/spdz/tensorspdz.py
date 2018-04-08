@@ -704,7 +704,7 @@ def reveal(x):
     
     return y
 
-def encode_input(vars_and_values)
+def encode_input(vars_and_values):
     if not isinstance(vars_and_values, list):
         vars_and_values = [vars_and_values]
     result = dict()
