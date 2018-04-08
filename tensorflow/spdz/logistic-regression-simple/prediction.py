@@ -171,20 +171,16 @@ def setup_private_prediction(W, B, shape_X):
 X, Y = generate_dataset(10000, 100)
 W, B = public_training(X, Y)
 
-# private_input = X[:1]
-# private_input = X[:10]
+# predict on batch size of 100
 private_input = X[:100]
-# private_input = X[:1000]
-# private_input = X[:10000]
-# private_input = np.concatenate([X]*10)
 
-public_prediction = setup_public_prediction(W, B, shape_X=private_input.shape)
+public_prediction  = setup_public_prediction(W, B, shape_X=private_input.shape)
 private_prediction = setup_private_prediction(W, B, shape_X=private_input.shape)
 
-y_pred_public = public_prediction(private_input)
+y_pred_public  = public_prediction(private_input)
 y_pred_private = private_prediction(private_input)
 
 print y_pred_public[:10], len(y_pred_public)
 print y_pred_private[:10], len(y_pred_private)
 
-# assert (abs(y_pred_private - y_pred_public) < 0.05).all(), y_pred_private
+assert (abs(y_pred_private - y_pred_public) < 0.01).all(), y_pred_private
