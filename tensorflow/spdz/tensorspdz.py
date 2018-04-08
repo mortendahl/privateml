@@ -188,6 +188,10 @@ class PrivateTensor(object):
     def shape(self):
         return self.share0[0].shape
 
+    @property
+    def unwrapped(self):
+        return (self.share0, self.share1)
+
     def __add__(x, y):
         return add(x, y)
     
@@ -211,6 +215,10 @@ class MaskedPrivateTensor(object):
         self.a1 = a1
         self.alpha_on_0 = alpha_on_0
         self.alpha_on_1 = alpha_on_1
+
+    @property
+    def shape(self):
+        return self.a[0].shape
 
     @property
     def unwrapped(self):
@@ -263,8 +271,8 @@ def add(x, y):
 
     if z is None:
 
-        x0, x1 = x.share0, x.share1
-        y0, y1 = y.share0, y.share1
+        x0, x1 = x.unwrapped
+        y0, y1 = y.unwrapped
         
         with tf.name_scope("add"):
         
@@ -288,8 +296,8 @@ def sub(x, y):
 
     if z is None:
 
-        x0, x1 = x.share0, x.share1
-        y0, y1 = y.share0, y.share1
+        x0, x1 = x.unwrapped
+        y0, y1 = y.unwrapped
         
         with tf.name_scope("sub"):
         
@@ -308,7 +316,7 @@ def scale(x, k, apply_encoding=None):
     assert isinstance(x, PrivateTensor)
     assert type(k) in [int, float]
 
-    x0, x1 = x.share0, x.share1
+    x0, x1 = x.unwrapped
 
     if apply_encoding is None:
         # determine automatically
@@ -340,7 +348,7 @@ def mask(x):
 
     if masked is None:
       
-        x0, x1 = x.share0, x.share1
+        x0, x1 = x.unwrapped
         shape = x.shape
       
         with tf.name_scope('mask'):
@@ -379,7 +387,7 @@ def cache(x):
 
         if isinstance(x, PrivateTensor):
 
-            x0, x1 = x.share0, x.share1
+            x0, x1 = x.unwrapped
 
             with tf.name_scope('cache'):
 
