@@ -95,15 +95,6 @@ def setup_public_prediction(W, B, shape_X):
 #     Private prediction     #
 ##############################
 
-# def prepare_input(inputs):
-#     for input, tensor:
-#         dict(
-#             (input_xi, Xi) for input_xi, Xi in zip(input_x, decompose(encode(X)))
-#         )
-
-# def decode_output(output):
-#   return decode(recombine(output))
-
 def setup_private_prediction(W, B, shape_X):
 
     input_x, x = define_input(shape_X, name='x')
@@ -148,15 +139,13 @@ def setup_private_prediction(W, B, shape_X):
 
                 y_pred = sess.run(
                     reveal(y),
-                    feed_dict=dict(
-                        (input_xi, Xi) for input_xi, Xi in zip(input_x, decompose(encode(X)))
-                    ),
+                    feed_dict=encode_input((input_x, X)),
                     options=run_options,
                     run_metadata=run_metadata
                 )
                 write_metadata('predict-{}'.format(i))
 
-                y_pred_private = decode(recombine(y_pred))
+                y_pred_private = decode_output(y_pred)
 
             writer.close()
 
