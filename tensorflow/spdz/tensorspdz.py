@@ -703,3 +703,14 @@ def reveal(x):
             y = reconstruct(x0, x1)
     
     return y
+
+def encode_input(vars_and_values)
+    if not isinstance(vars_and_values, list):
+        vars_and_values = [vars_and_values]
+    result = dict()
+    for input_x, X in vars_and_values:
+        result.update( (input_xi, Xi) for input_xi, Xi in zip(input_x, decompose(encode(X))) )
+    return result
+
+def decode_output(value):
+    return decode(recombine(value))
