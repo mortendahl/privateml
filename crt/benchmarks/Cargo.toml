@@ -1,0 +1,7 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+authors = ["Morten Dahl <mortendahlcs@gmail.com>"]
+
+[dependencies]
+rayon = "*"
