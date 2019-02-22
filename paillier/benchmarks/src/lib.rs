@@ -25,13 +25,13 @@ fn l(u: &BigInt, n: &BigInt) -> BigInt {
     (u - 1) / n
 }
 
-fn h(p: &BigInt, pp: &BigInt, n: &BigInt) -> BigInt {
+fn h(m: &BigInt, mm: &BigInt, n: &BigInt) -> BigInt {
     // compute g^{p-1} mod p^2
-    let gp = (1 - n) % pp;
+    let gm = (1 - n) % mm;
     // compute L_p(.)
-    let lp = l(&gp, p);
+    let lm = l(&gm, m);
     // compute L_p(.)^{-1}
-    modinv(&lp, p)
+    modinv(&lm, m)
 }
 
 pub struct EncryptionKey {
@@ -58,10 +58,9 @@ pub struct DecryptionKey {
     n: BigInt, nn: BigInt,
     p: BigInt, pp: BigInt,
     q: BigInt, qq: BigInt,
-    g: BigInt,
-    n_order: BigInt, n_order_inv: BigInt,
-    p_order: BigInt, p_order_inv: BigInt,
-    q_order: BigInt, q_order_inv: BigInt,
+    n_order_n_order_inv: BigInt,
+    p_order: BigInt, hp: BigInt,
+    q_order: BigInt, hq: BigInt,
 }
 
 impl DecryptionKey {
@@ -71,25 +70,23 @@ impl DecryptionKey {
         let pp = &p * &p;
         let qq = &q * &q;
 
-        let g = 1 + &n;
-
         let n_order = (&p - 1) * (&q - 1);
         let n_order_inv = modinv(&n_order, &n);
+        let n_order_n_order_inv = &n_order * &n_order_inv;
 
         let p_order = &p - 1;
-        let p_order_inv = modinv(&p_order, &p);
+        let hp = h(&p, &pp, &n); // modinv(&l(&modpow(&g, &p_order, &pp), &p), &p);
 
         let q_order = &q - 1;
-        let q_order_inv = modinv(&q_order, &q);
+        let hq = h(&q, &qq, &n); // modinv(&l(&modpow(&g, &q_order, &qq), &q), &q);
 
         DecryptionKey { 
             n, nn,
             p, pp,
             q, qq,
-            g,
-            n_order, n_order_inv,
-            p_order, p_order_inv,
-            q_order, q_order_inv
+            n_order_n_order_inv,
+            p_order, hp,
+            q_order, hq,
         }
     }
 }
@@ -130,8 +127,7 @@ mod plain {
     }
 
     pub fn decrypt(c: &BigInt, dk: &DecryptionKey) -> BigInt {
-        let d = &dk.n_order * &dk.n_order_inv;
-        let gx = modpow(c, &d, &dk.nn);
+        let gx = modpow(c, &dk.n_order_n_order_inv, &dk.nn);
         (gx - 1) / &dk.n
     }
 
@@ -239,24 +235,20 @@ mod crt {
 
     fn decrypt_component(
         c: &BigInt,
-        dk: &DecryptionKey,
         m: &BigInt,
         mm: &BigInt,
         m_order: &BigInt,
-        m_order_inv: &BigInt,
+        hm: &BigInt,
     ) -> BigInt {
         let dm = modpow(c, m_order, mm);
         let lm = l(&dm, m);
-        let bar = modpow(&dk.g, m_order, mm);
-        let foo = l(&bar, m);
-        let hm = modinv(&foo, m);
         (lm * hm) % m
     }
 
     pub fn decrypt(c: &BigInt, dk: &DecryptionKey) -> BigInt {
         let (cp, cq) = (c % &dk.pp, c % &dk.qq);
-        let mp = decrypt_component(&cp, dk, &dk.p, &dk.pp, &dk.p_order, &dk.p_order_inv);
-        let mq = decrypt_component(&cq, dk, &dk.q, &dk.qq, &dk.q_order, &dk.q_order_inv);
+        let mp = decrypt_component(&cp, &dk.p, &dk.pp, &dk.p_order, &dk.hp);
+        let mq = decrypt_component(&cq, &dk.q, &dk.qq, &dk.q_order, &dk.hq);
         crt(&mp, &mq, &dk.p, &dk.q)
     }
 
@@ -326,11 +318,11 @@ mod crt {
             let (mp, mq) = join(
                 || {
                     let cp = c % &dk.pp;
-                    decrypt_component(&cp, dk, &dk.p, &dk.pp, &dk.p_order, &dk.p_order_inv)
+                    decrypt_component(&cp, &dk.p, &dk.pp, &dk.p_order, &dk.hp)
                 },
                 || {
                     let cq = c % &dk.qq;
-                    decrypt_component(&cq, dk, &dk.q, &dk.qq, &dk.q_order, &dk.q_order_inv)
+                    decrypt_component(&cq, &dk.q, &dk.qq, &dk.q_order, &dk.hq)
                 },
             );
             crt(&mp, &mq, &dk.p, &dk.q)
