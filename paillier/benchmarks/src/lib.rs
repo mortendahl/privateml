@@ -75,10 +75,10 @@ impl DecryptionKey {
         let n_order_n_order_inv = &n_order * &n_order_inv;
 
         let p_order = &p - 1;
-        let hp = h(&p, &pp, &n); // modinv(&l(&modpow(&g, &p_order, &pp), &p), &p);
+        let hp = h(&p, &pp, &n);
 
         let q_order = &q - 1;
-        let hq = h(&q, &qq, &n); // modinv(&l(&modpow(&g, &q_order, &qq), &q), &q);
+        let hq = h(&q, &qq, &n);
 
         DecryptionKey { 
             n, nn,
@@ -233,13 +233,7 @@ mod crt {
         });
     }
 
-    fn decrypt_component(
-        c: &BigInt,
-        m: &BigInt,
-        mm: &BigInt,
-        m_order: &BigInt,
-        hm: &BigInt,
-    ) -> BigInt {
+    fn decrypt_component(c: &BigInt, m: &BigInt, mm: &BigInt, m_order: &BigInt, hm: &BigInt) -> BigInt {
         let dm = modpow(c, m_order, mm);
         let lm = l(&dm, m);
         (lm * hm) % m
