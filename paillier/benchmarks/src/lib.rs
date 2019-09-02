@@ -234,8 +234,8 @@ mod specialized {
 
     fn encrypt(ek: &EncryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
         let gx = 1 + (x * &ek.n);
-        let rm = pow(r, &ek.n, &ek.nn);
-        let c = (gx * rm) % &ek.nn;
+        let rn = pow(r, &ek.n, &ek.nn);
+        let c = (gx * rn) % &ek.nn;
         c
     }
 
@@ -353,6 +353,61 @@ mod specialized {
         });
     }
 
+}
+
+mod precomputed {
+
+    use super::*;
+
+    struct EncryptionKey {
+        n: BigInt, nn: BigInt,
+    }
+
+    impl EncryptionKey {
+        fn from(p: BigInt, q: BigInt) -> EncryptionKey {
+            let n = &p * &q;
+            let nn = &n * &n;
+            
+            EncryptionKey { n, nn }
+        }
+    }
+
+    fn encrypt(ek: &EncryptionKey, x: &BigInt, rn: &BigInt) -> BigInt {
+        let gx = 1 + (x * &ek.n);
+        let c = (gx * rn) % &ek.nn;
+        c
+    }
+
+    #[test]
+    fn test_encrypt() {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        let x = test_values.x;
+        let r = test_values.r;
+        let c = test_values.c;
+
+        let ek = EncryptionKey::from(p, q);
+        let rn = pow(&r, &ek.n, &ek.nn);
+
+        assert_eq!(encrypt(&ek, &x, &rn), c);
+    }
+
+    #[bench]
+    fn bench_encrypt(b: &mut Bencher) {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        let x = test_values.x;
+        let r = test_values.r;
+
+        let ek = EncryptionKey::from(p, q);
+        let rn = pow(&r, &ek.n, &ek.nn);
+
+        b.iter(|| {
+            let _ = encrypt(&ek, &x, &rn);
+        });
+    }
 }
 
 mod crt {
