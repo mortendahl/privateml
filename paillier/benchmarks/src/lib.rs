@@ -62,7 +62,8 @@ pub fn crt(x1: &BigInt, x2: &BigInt, m1: &BigInt, m2: &BigInt, m1_inv: &BigInt) 
         diff = (diff % m2) + m2;
     }
     let u = (diff * m1_inv) % m2;
-    x1 + (u * m1)
+    let x = x1 + (u * m1);
+    x
 }
 
 mod plain {
@@ -441,15 +442,17 @@ mod crt {
     fn encrypt(x: &BigInt, r: &BigInt, ek: &EncryptionKey) -> BigInt {
         let cp = encrypt_component(x, r, &ek.n, &ek.p, &ek.pp);
         let cq = encrypt_component(x, r, &ek.n, &ek.q, &ek.qq);
-        crt(&cp, &cq, &ek.pp, &ek.qq, &ek.pp_inv)
+        let c = crt(&cp, &cq, &ek.pp, &ek.qq, &ek.pp_inv);
+        c
     }
 
     fn encrypt_component(x: &BigInt, r: &BigInt, n: &BigInt, m: &BigInt, mm: &BigInt) -> BigInt {
         let xm = x % m;
         let rm = r % mm;
-        let gx = (1 + (xm * n)) % mm;
+        let gx = (1 + xm * n) % mm;
         let rn = pow(&rm, n, mm);
-        (gx * rn) % mm
+        let cm = (gx * rn) % mm;
+        cm
     }
 
     #[test]
@@ -514,16 +517,18 @@ mod crt {
     }
 
     fn decrypt(c: &BigInt, dk: &DecryptionKey) -> BigInt {
-        let mp = decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p);
-        let mq = decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q);
-        crt(&mp, &mq, &dk.p, &dk.q, &dk.p_inv)
+        let xp = decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p);
+        let xq = decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q);
+        let x = crt(&xp, &xq, &dk.p, &dk.q, &dk.p_inv);
+        x
     }
 
     fn decrypt_component(c: &BigInt, m: &BigInt, mm: &BigInt, d1: &BigInt, d2: &BigInt) -> BigInt {
         let cm = c % mm;
         let dm = pow(&cm, d1, mm);
         let lm = l(&dm, m);
-        (lm * d2) % m
+        let xm = (lm * d2) % m;
+        xm
     }
 
     #[test]
@@ -556,7 +561,8 @@ mod crt {
     fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
         let rp = extract_component(c, &dk.p, &dk.ep);
         let rq = extract_component(c, &dk.q, &dk.eq);
-        crt(&rp, &rq, &dk.p, &dk.q, &dk.p_inv)
+        let r = crt(&rp, &rq, &dk.p, &dk.q, &dk.p_inv);
+        r
     }
 
     fn extract_component(c: &BigInt, m: &BigInt, e: &BigInt) -> BigInt {
@@ -770,68 +776,6 @@ mod micro {
             let m: BigInt = str::parse("11919263452367059666018767206646516811042722401229904215556238457605297409757143070037879145312700685756611459168847326575559580253511486378534783141802930544523303603592033174844605626269857236296584909916935140188850184921847374612433948350120413737857810296652014840419928040409382335515954608864253937524757347592397440612028754280737096770230368277054931704290224165299843125505132905435715700230492710013707895760947527291072845887774637868810622595696796657661930103622876635161471752312090759515854195748854119478950486548009570476057421635277994889983439015042209811043389216159647508736245760000000000000000").unwrap();
             assert_eq!(m.bit_length(), 2047);
             bench_core(b, &m);
-        }
-
-    }
-
-    mod encrypt_pow {
-
-        use super::*;
-
-        fn bench_core(b: &mut Bencher, m: &BigInt) {
-            let mm = m * m;
-
-            b.iter(|| {
-                let _ = pow(&mm, m, &mm);
-            });
-        }
-
-        #[bench]
-        fn bench_128(b: &mut Bencher) {
-            let p: BigInt = str::parse("319716896562200682735840267002423031680").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_256(b: &mut Bencher) {
-            let p: BigInt = str::parse("7378740856134580605362402465931834256927758969036368855405173078712164227784").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_384(b: &mut Bencher) {
-            let p: BigInt = str::parse("22921374554465942429152805616330961622643394115521563481582829694156056385137621248681298481472166035396431981539901").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_512(b: &mut Bencher) {
-            let p: BigInt = str::parse("12804421809745003387800128055517611769213829616068062445960016554451898140483147818725765763847315651447041375566198930459159908744993174806906690539183097").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_640(b: &mut Bencher) {
-            let p: BigInt = str::parse("3222624039285302177842274548945800341027886460377492433378911959285815025076656349024580623540117264402528972057701188969754137249273390460148899548603536885972954803841646192159060279730559559").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_768(b: &mut Bencher) {
-            let p: BigInt = str::parse("663643409354955645646976787894211857456424188383215225170267749236561628525970420407663206891688700325713374567942550494420258473958297116783424672449941676578669707676613949350318519324633965669248716915152790980182875271814116859").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_896(b: &mut Bencher) {
-            let p: BigInt = str::parse("105053313063952769122401407442039542735627483343300588357971572760465525157642290611748018801607777377778198079228484019441380713882622883467391594596274167060897433484060547854433438860629846854563056524556605769361155903623770795497272787932998465603852350738044184477").unwrap();
-            bench_core(b, &p);
-        }
-
-        #[bench]
-        fn bench_1024(b: &mut Bencher) {
-            let p4: BigInt = str::parse("178437406485438541062866711495400213265781028310924993206420603895897030228568284192835591807793225566228728107285518108571532334820696464527565472188209555783369124458898510314906401914269785711658192684988252774390769829476411634378403840007834957733350213808758096314481793316929200142411006019531260706709").unwrap();
-            bench_core(b, &p4);
         }
 
     }
