@@ -476,36 +476,63 @@ mod precomputed_randomness {
 
 mod crt {
 
-    use super::*;
+    use ::*;
 
-    struct EncryptionKey {
+    struct DecryptionKey {
         n: BigInt,
-        p: BigInt, pp: BigInt,
-        q: BigInt, qq: BigInt,
-        pp_inv: BigInt
+        p: BigInt, pp: BigInt, d1p: BigInt, d2p: BigInt, ep: BigInt,
+        q: BigInt, qq: BigInt, d1q: BigInt, d2q: BigInt, eq: BigInt,
+        p_inv: BigInt, pp_inv: BigInt,
     }
 
-    impl EncryptionKey {
-        fn from(p: BigInt, q: BigInt) -> EncryptionKey {
+    impl DecryptionKey {
+        fn from(keypair: &Keypair) -> DecryptionKey {
+            let p = keypair.p.clone();
+            let q = keypair.q.clone();
+
             let n = &p * &q;
             let pp = &p * &p;
             let qq = &q * &q;
 
+            let order_of_p = &p - 1;
+            let ep = inv(&n, &order_of_p);
+            let d2p = h(&p, &pp, &n);
+            let d1p = order_of_p;
+            
+            let order_of_q = &q - 1;
+            let eq = inv(&n, &order_of_q);
+            let d2q = h(&q, &qq, &n);
+            let d1q = order_of_q;
+
+            let p_inv = inv(&p, &q);
             let pp_inv = inv(&pp, &qq);
 
-            EncryptionKey { 
+            DecryptionKey {
                 n,
-                p, pp,
-                q, qq,
-                pp_inv,
+                p, pp, d1p, d2p, ep,
+                q, qq, d1q, d2q, eq,
+                p_inv, pp_inv,
             }
         }
     }
 
-    fn encrypt(x: &BigInt, r: &BigInt, ek: &EncryptionKey) -> BigInt {
-        let cp = encrypt_component(x, r, &ek.n, &ek.p, &ek.pp);
-        let cq = encrypt_component(x, r, &ek.n, &ek.q, &ek.qq);
-        let c = crt(&cp, &cq, &ek.pp, &ek.qq, &ek.pp_inv);
+    #[bench]
+    fn bench_decryption_key(b: &mut Bencher) {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        
+        let keypair = Keypair { p, q };
+
+        b.iter(|| {
+            let _ = DecryptionKey::from(&keypair);
+        });
+    }
+
+    fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
+        let cp = encrypt_component(x, r, &dk.n, &dk.p, &dk.pp);
+        let cq = encrypt_component(x, r, &dk.n, &dk.q, &dk.qq);
+        let c = crt(&cp, &cq, &dk.pp, &dk.qq, &dk.pp_inv);
         c
     }
 
@@ -549,39 +576,7 @@ mod crt {
         });
     }
 
-    struct DecryptionKey {
-        p: BigInt, pp: BigInt, d1p: BigInt, d2p: BigInt, ep: BigInt,
-        q: BigInt, qq: BigInt, d1q: BigInt, d2q: BigInt, eq: BigInt,
-        p_inv: BigInt,
-    }
-
-    impl DecryptionKey {
-        fn from(p: BigInt, q: BigInt) -> DecryptionKey {
-            let n = &p * &q;
-            let pp = &p * &p;
-            let qq = &q * &q;
-
-            let order_of_p = &p - 1;
-            let ep = inv(&n, &order_of_p);
-            let d2p = h(&p, &pp, &n);
-            let d1p = order_of_p;
-            
-            let order_of_q = &q - 1;
-            let eq = inv(&n, &order_of_q);
-            let d2q = h(&q, &qq, &n);
-            let d1q = order_of_q;
-
-            let p_inv = inv(&p, &q);
-
-            DecryptionKey {
-                p, pp, d1p, d2p, ep,
-                q, qq, d1q, d2q, eq,
-                p_inv,
-            }
-        }
-    }
-
-    fn decrypt(c: &BigInt, dk: &DecryptionKey) -> BigInt {
+    fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
         let xp = decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p);
         let xq = decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q);
         let x = crt(&xp, &xq, &dk.p, &dk.q, &dk.p_inv);
