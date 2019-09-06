@@ -66,23 +66,42 @@ pub fn crt(x1: &BigInt, x2: &BigInt, m1: &BigInt, m2: &BigInt, m1_inv: &BigInt) 
     x
 }
 
+pub struct Keypair {
+    p: BigInt,
+    q: BigInt,
+}
+
 mod plain {
 
-    use super::*;
+    use ::*;
 
     struct EncryptionKey {
-        n: BigInt, nn: BigInt,
+        n: BigInt,
+        nn: BigInt,
         g: BigInt,
     }
 
     impl EncryptionKey {
-        fn from(p: BigInt, q: BigInt) -> EncryptionKey {
-            let n = &p * &q;
+        fn from(keypair: &Keypair) -> EncryptionKey {
+            let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
             let g = 1 + &n;
 
             EncryptionKey { n, nn, g }
         }
+    }
+
+    #[bench]
+    fn bench_encryption_key(b: &mut Bencher) {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        
+        let keypair = Keypair { p, q };
+
+        b.iter(|| {
+            let _ = EncryptionKey::from(&keypair);
+        });
     }
 
     fn encrypt(ek: &EncryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
@@ -101,7 +120,8 @@ mod plain {
         let r = test_values.r;
         let c = test_values.c;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let ek = EncryptionKey::from(&keypair);
 
         assert_eq!(encrypt(&ek, &x, &r), c);
     }
@@ -114,7 +134,8 @@ mod plain {
         let x = test_values.x;
         let r = test_values.r;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let ek = EncryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = encrypt(&ek, &x, &r);
@@ -122,7 +143,8 @@ mod plain {
     }
 
     struct DecryptionKey {
-        n: BigInt, nn: BigInt,
+        n: BigInt,
+        nn: BigInt,
         g: BigInt,
         d1: BigInt,
         d2: BigInt,
@@ -130,18 +152,31 @@ mod plain {
     }
 
     impl DecryptionKey {
-        fn from(p: BigInt, q: BigInt) -> DecryptionKey {
-            let n = &p * &q;
+        fn from(keypair: &Keypair) -> DecryptionKey {
+            let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
             let g = 1 + &n;
 
-            let order_of_n = (&p - 1) * (&q - 1);
+            let order_of_n = (&keypair.p - 1) * (&keypair.q - 1);
             let e = inv(&n, &order_of_n);
             let d2 = inv(&order_of_n, &n);
             let d1 = order_of_n;
 
             DecryptionKey { n, nn, g, d1, d2, e }
         }
+    }
+
+    #[bench]
+    fn bench_decryption_key(b: &mut Bencher) {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        
+        let keypair = Keypair { p, q };
+
+        b.iter(|| {
+            let _ = DecryptionKey::from(&keypair);
+        });
     }
 
     fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
@@ -159,7 +194,8 @@ mod plain {
         let x = test_values.x;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         assert_eq!(decrypt(&dk, &c), x);
     }
@@ -171,7 +207,8 @@ mod plain {
         let q = test_values.q;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = decrypt(&dk, &c);
@@ -195,7 +232,8 @@ mod plain {
         let r = test_values.r;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         assert_eq!(extract(&dk, &c), r);
     }
@@ -207,7 +245,8 @@ mod plain {
         let q = test_values.q;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = extract(&dk, &c);
@@ -218,23 +257,37 @@ mod plain {
 
 mod specialized {
 
-    use super::*;
+    use ::*;
 
-    struct EncryptionKey {
-        n: BigInt, nn: BigInt,
+    pub struct EncryptionKey {
+        pub n: BigInt,
+        pub nn: BigInt,
     }
 
     impl EncryptionKey {
-        fn from(p: BigInt, q: BigInt) -> EncryptionKey {
-            let n = &p * &q;
+        pub fn from(keypair: &Keypair) -> EncryptionKey {
+            let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
             
             EncryptionKey { n, nn }
         }
     }
 
+    #[bench]
+    fn bench_encryption_key(b: &mut Bencher) {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        
+        let keypair = Keypair { p, q };
+
+        b.iter(|| {
+            let _ = EncryptionKey::from(&keypair);
+        });
+    }
+
     fn encrypt(ek: &EncryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
-        let gx = 1 + (x * &ek.n);
+        let gx = 1 + x * &ek.n;
         let rn = pow(r, &ek.n, &ek.nn);
         let c = (gx * rn) % &ek.nn;
         c
@@ -249,7 +302,8 @@ mod specialized {
         let r = test_values.r;
         let c = test_values.c;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let ek = EncryptionKey::from(&keypair);
 
         assert_eq!(encrypt(&ek, &x, &r), c);
     }
@@ -262,7 +316,8 @@ mod specialized {
         let x = test_values.x;
         let r = test_values.r;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let ek = EncryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = encrypt(&ek, &x, &r);
@@ -274,17 +329,30 @@ mod specialized {
     }
 
     impl DecryptionKey {
-        fn from(p: BigInt, q: BigInt) -> DecryptionKey {
-            let n = &p * &q;
+        fn from(keypair: &Keypair) -> DecryptionKey {
+            let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
 
-            let order_of_n = (&p - 1) * (&q - 1);
+            let order_of_n = (&keypair.p - 1) * (&keypair.q - 1);
             let e = inv(&n, &order_of_n);
             let d2 = inv(&order_of_n, &n);
             let d1 = order_of_n;
 
             DecryptionKey { n, nn, d1, d2, e }
         }
+    }
+
+    #[bench]
+    fn bench_decryption_key(b: &mut Bencher) {
+        let test_values = TestValues::parse();
+        let p = test_values.p;
+        let q = test_values.q;
+        
+        let keypair = Keypair { p, q };
+
+        b.iter(|| {
+            let _ = DecryptionKey::from(&keypair);
+        });
     }
 
     fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
@@ -302,7 +370,8 @@ mod specialized {
         let x = test_values.x;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         assert_eq!(decrypt(&dk, &c), x);
     }
@@ -314,7 +383,8 @@ mod specialized {
         let q = test_values.q;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = decrypt(&dk, &c);
@@ -335,7 +405,8 @@ mod specialized {
         let r = test_values.r;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         assert_eq!(extract(&dk, &c), r);
     }
@@ -347,7 +418,8 @@ mod specialized {
         let q = test_values.q;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = extract(&dk, &c);
@@ -356,22 +428,11 @@ mod specialized {
 
 }
 
-mod precomputed {
+mod precomputed_randomness {
 
-    use super::*;
+    use ::*;
 
-    struct EncryptionKey {
-        n: BigInt, nn: BigInt,
-    }
-
-    impl EncryptionKey {
-        fn from(p: BigInt, q: BigInt) -> EncryptionKey {
-            let n = &p * &q;
-            let nn = &n * &n;
-            
-            EncryptionKey { n, nn }
-        }
-    }
+    use ::specialized::EncryptionKey;
 
     fn encrypt(ek: &EncryptionKey, x: &BigInt, rn: &BigInt) -> BigInt {
         let gx = 1 + (x * &ek.n);
@@ -388,7 +449,8 @@ mod precomputed {
         let r = test_values.r;
         let c = test_values.c;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let ek = EncryptionKey::from(&keypair);
         let rn = pow(&r, &ek.n, &ek.nn);
 
         assert_eq!(encrypt(&ek, &x, &rn), c);
@@ -402,7 +464,8 @@ mod precomputed {
         let x = test_values.x;
         let r = test_values.r;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let ek = EncryptionKey::from(&keypair);
         let rn = pow(&r, &ek.n, &ek.nn);
 
         b.iter(|| {
@@ -464,9 +527,10 @@ mod crt {
         let r = test_values.r;
         let c = test_values.c;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
-        assert_eq!(encrypt(&x, &r, &ek), c);
+        assert_eq!(encrypt(&dk, &x, &r), c);
     }
 
     #[bench]
@@ -477,10 +541,11 @@ mod crt {
         let x = test_values.x;
         let r = test_values.r;
 
-        let ek = EncryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
-            let _ = encrypt(&x, &r, &ek);
+            let _ = encrypt(&dk, &x, &r);
         });
     }
 
@@ -539,9 +604,10 @@ mod crt {
         let x = test_values.x;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
-        assert_eq!(decrypt(&c, &dk), x);
+        assert_eq!(decrypt(&dk, &c), x);
     }
 
     #[bench]
@@ -551,10 +617,11 @@ mod crt {
         let q = test_values.q;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
-            let _ = decrypt(&c, &dk);
+            let _ = decrypt(&dk, &c);
         });
     }
 
@@ -579,7 +646,8 @@ mod crt {
         let r = test_values.r;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         assert_eq!(extract(&dk, &c), r);
     }
@@ -591,7 +659,8 @@ mod crt {
         let q = test_values.q;
         let c = test_values.c;
 
-        let dk = DecryptionKey::from(p, q);
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
         b.iter(|| {
             let _ = extract(&dk, &c);
@@ -600,20 +669,17 @@ mod crt {
 
     mod parallel {
 
-        use super::Bencher;
-        use super::{BigInt, TestValues};
-        use super::{crt};
-        use super::EncryptionKey;
-        use super::DecryptionKey;
+        use ::*;
+        use ::crt::{DecryptionKey, encrypt_component, decrypt_component, extract_component};
 
         use rayon::join;
 
-        fn encrypt(x: &BigInt, r: &BigInt, ek: &EncryptionKey) -> BigInt {
+        fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
             let (cp, cq) = join(
-                || super::encrypt_component(x, r, &ek.n, &ek.p, &ek.pp),
-                || super::encrypt_component(x, r, &ek.n, &ek.p, &ek.qq),
+                || encrypt_component(x, r, &dk.n, &dk.p, &dk.pp),
+                || encrypt_component(x, r, &dk.n, &dk.p, &dk.qq),
             );
-            crt(&cp, &cq, &ek.pp, &ek.qq, &ek.pp_inv)
+            crt(&cp, &cq, &dk.pp, &dk.qq, &dk.pp_inv)
         }
 
         #[bench]
@@ -624,17 +690,18 @@ mod crt {
             let x = test_values.x;
             let r = test_values.r;
 
-            let ek = EncryptionKey::from(p, q);
+            let keypair = Keypair { p, q };
+            let dk = DecryptionKey::from(&keypair);
 
             b.iter(|| {
-                let _ = encrypt(&x, &r, &ek);
+                let _ = encrypt(&dk, &x, &r);
             });
         }
 
-        fn decrypt(c: &BigInt, dk: &DecryptionKey) -> BigInt {
+        fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
             let (mp, mq) = join(
-                || super::decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p),
-                || super::decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q),
+                || decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p),
+                || decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q),
             );
             crt(&mp, &mq, &dk.p, &dk.q, &dk.p_inv)
         }
@@ -646,17 +713,18 @@ mod crt {
             let q = test_values.q;
             let c = test_values.c;
 
-            let dk = DecryptionKey::from(p, q);
+            let keypair = Keypair { p, q };
+            let dk = DecryptionKey::from(&keypair);
 
             b.iter(|| {
-                let _ = decrypt(&c, &dk);
+                let _ = decrypt(&dk, &c);
             });
         }
 
         fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
             let (rp, rq) = join(
-                || super::extract_component(c, &dk.p, &dk.ep),
-                || super::extract_component(c, &dk.q, &dk.eq),
+                || extract_component(c, &dk.p, &dk.ep),
+                || extract_component(c, &dk.q, &dk.eq),
             );
             crt(&rp, &rq, &dk.p, &dk.q, &dk.p_inv)
         }
@@ -668,7 +736,8 @@ mod crt {
             let q = test_values.q;
             let c = test_values.c;
 
-            let dk = DecryptionKey::from(p, q);
+            let keypair = Keypair { p, q };
+            let dk = DecryptionKey::from(&keypair);
 
             b.iter(|| {
                 let _ = extract(&dk, &c);
