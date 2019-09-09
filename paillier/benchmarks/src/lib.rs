@@ -56,13 +56,28 @@ pub fn h(m: &BigInt, mm: &BigInt, n: &BigInt) -> BigInt {
     inv(&lm, m)
 }
 
-pub fn crt(x1: &BigInt, x2: &BigInt, m1: &BigInt, m2: &BigInt, m1_inv: &BigInt) -> BigInt {
+pub struct CrtParams {
+    m1: BigInt,
+    m2: BigInt,
+    m1_inv: BigInt,
+}
+
+impl CrtParams {
+    pub fn new(m1: &BigInt, m2: &BigInt) -> CrtParams {
+        let m1_inv = inv(m1, m2);
+        let m1 = m1.clone();
+        let m2 = m2.clone();
+        CrtParams { m1, m2, m1_inv }
+    }
+}
+
+pub fn crt(params: &CrtParams, x1: &BigInt, x2: &BigInt) -> BigInt {
     let mut diff = x2 - x1;
     if diff.sign() == Sign::Negative {
-        diff = (diff % m2) + m2;
+        diff = (diff % &params.m2) + &params.m2;
     }
-    let u = (diff * m1_inv) % m2;
-    let x = x1 + (u * m1);
+    let u = (diff * &params.m1_inv) % &params.m2;
+    let x = x1 + (u * &params.m1);
     x
 }
 
@@ -325,7 +340,11 @@ mod specialized {
     }
 
     struct DecryptionKey {
-        n: BigInt, nn: BigInt, d1: BigInt, d2: BigInt, e: BigInt,
+        n: BigInt,
+        nn: BigInt,
+        d1: BigInt,
+        d2: BigInt,
+        e: BigInt,
     }
 
     impl DecryptionKey {
@@ -482,7 +501,8 @@ mod crt {
         n: BigInt,
         p: BigInt, pp: BigInt, d1p: BigInt, d2p: BigInt, ep: BigInt,
         q: BigInt, qq: BigInt, d1q: BigInt, d2q: BigInt, eq: BigInt,
-        p_inv: BigInt, pp_inv: BigInt,
+        n_crt: CrtParams,
+        nn_crt: CrtParams,
     }
 
     impl DecryptionKey {
@@ -504,14 +524,15 @@ mod crt {
             let d2q = h(&q, &qq, &n);
             let d1q = order_of_q;
 
-            let p_inv = inv(&p, &q);
-            let pp_inv = inv(&pp, &qq);
+            let n_crt = CrtParams::new(&p, &q);
+            let nn_crt = CrtParams::new(&pp, &qq);
 
             DecryptionKey {
                 n,
                 p, pp, d1p, d2p, ep,
                 q, qq, d1q, d2q, eq,
-                p_inv, pp_inv,
+                n_crt,
+                nn_crt,
             }
         }
     }
@@ -532,7 +553,7 @@ mod crt {
     fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
         let cp = encrypt_component(x, r, &dk.n, &dk.p, &dk.pp);
         let cq = encrypt_component(x, r, &dk.n, &dk.q, &dk.qq);
-        let c = crt(&cp, &cq, &dk.pp, &dk.qq, &dk.pp_inv);
+        let c = crt(&dk.nn_crt, &cp, &cq);
         c
     }
 
@@ -579,7 +600,7 @@ mod crt {
     fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
         let xp = decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p);
         let xq = decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q);
-        let x = crt(&xp, &xq, &dk.p, &dk.q, &dk.p_inv);
+        let x = crt(&dk.n_crt, &xp, &xq);
         x
     }
 
@@ -623,7 +644,7 @@ mod crt {
     fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
         let rp = extract_component(c, &dk.p, &dk.ep);
         let rq = extract_component(c, &dk.q, &dk.eq);
-        let r = crt(&rp, &rq, &dk.p, &dk.q, &dk.p_inv);
+        let r = crt(&dk.n_crt, &rp, &rq);
         r
     }
 
@@ -674,7 +695,7 @@ mod crt {
                 || encrypt_component(x, r, &dk.n, &dk.p, &dk.pp),
                 || encrypt_component(x, r, &dk.n, &dk.p, &dk.qq),
             );
-            crt(&cp, &cq, &dk.pp, &dk.qq, &dk.pp_inv)
+            crt(&dk.nn_crt, &cp, &cq)
         }
 
         #[bench]
@@ -698,7 +719,7 @@ mod crt {
                 || decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p),
                 || decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q),
             );
-            crt(&mp, &mq, &dk.p, &dk.q, &dk.p_inv)
+            crt(&dk.n_crt, &mp, &mq)
         }
 
         #[bench]
@@ -721,7 +742,7 @@ mod crt {
                 || extract_component(c, &dk.p, &dk.ep),
                 || extract_component(c, &dk.q, &dk.eq),
             );
-            crt(&rp, &rq, &dk.p, &dk.q, &dk.p_inv)
+            crt(&dk.n_crt, &rp, &rq)
         }
 
         #[bench]
