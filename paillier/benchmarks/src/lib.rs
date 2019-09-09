@@ -6,7 +6,6 @@ extern crate test;
 
 use gmp::mpz::Mpz as BigInt;
 use gmp::sign::Sign;
-use test::Bencher;
 
 
 pub struct TestValues {
@@ -19,19 +18,19 @@ pub struct TestValues {
 
 impl TestValues {    
     pub fn parse() -> Self {
-        let P: &'static str = "148677972634832330983979593310074301486537017973460461278300587514468301043894574906886127642530475786889672304776052879927627556769456140664043088700743909632312483413393134504352834240399191134336344285483935856491230340093391784574980688823380828143810804684752914935441384845195613674104960646037368551517";
-        let Q: &'static str = "158741574437007245654463598139927898730476924736461654463975966787719309357536545869203069369466212089132653564188443272208127277664424448947476335413293018778018615899291704693105620242763173357203898195318179150836424196645745308205164116144020613415407736216097185962171301808761138424668335445923774195463";
-        let X: &'static str = "8116954461269652085230775933492366253929619979964246027246617328236243795946267984122836662596238827711003162168747438362516197517513090468979133736169125128476037082825330864610731186580002727070392849209478375921588198871833235568390694413294064765159446378195902634553122666031519508653458373801364626796907156918652837961453184912515251722492496853769056007056222605281803303377223245158930080581216344814858180859850388248516110876304421350734473865383370328091654104048265291335553686536171725033973437997155180998731315175192344098133206744942235940959001435284014629247610235987290001278275024859859011530610";
-        let R: &'static str = "23469954723780858594246099985284351679616402035799877801904657600748845577732527349622767465073206402501465434997097886062288454586744002070231423281154066427914375124691393663408153322045175238293238130584029098551997891083995941940072522297040482563102994301991914687415608932934232322244422743863612925485379738169539911563673020855346364903207395531099432657381392680821739845416005854261986810418869105342379811199853817109183567590778515098199155952701550697969915592026323126896564744857660315540347612223681727710811401589383421009333736638539423942798822879086915723828754886239159868603235567977031107975333";
-        let C: &'static str = "257203447105391916804089534214900683312963097096490235488958404866382741464385583184601128552670618981990000105037083690090594298564475202598013462067431119022723496775733949006049841771523035314712582893707414778394151736782745046995179058013948782711907055567514176057362937274003340106139237726460592991291649036854647465105678112034545238612525869223794770077034914371840530192251732830868984008901241006294086749915286415154943481920642073417739888367146198161135533211217852125267939460775999200943311678088646957279291231065720239752089787957176968565441059132771040186019584522752156210356879184733001364159458400826829676108356363700260706055423980900810086835364443358559049002895766426201073894808737170968355348275995156366869463099375320511865686019912874183927654191322970227080404808169296681251742918581398335645810766224246925708682914546637276241236065831895597376590899342810804823166192194221790279822050700148335320259676027171464292155454236417540711787990414904918789189297629562318139402290148344330957118511748943890681355239458737273975338090521441500322894883091962991413705362193011723285869089808996484682861997586072545454669866370589115975111183983919754128226878169359264094995923843080089523149217085";
+        let p: &str = "148677972634832330983979593310074301486537017973460461278300587514468301043894574906886127642530475786889672304776052879927627556769456140664043088700743909632312483413393134504352834240399191134336344285483935856491230340093391784574980688823380828143810804684752914935441384845195613674104960646037368551517";
+        let q: &str = "158741574437007245654463598139927898730476924736461654463975966787719309357536545869203069369466212089132653564188443272208127277664424448947476335413293018778018615899291704693105620242763173357203898195318179150836424196645745308205164116144020613415407736216097185962171301808761138424668335445923774195463";
+        let x: &str = "8116954461269652085230775933492366253929619979964246027246617328236243795946267984122836662596238827711003162168747438362516197517513090468979133736169125128476037082825330864610731186580002727070392849209478375921588198871833235568390694413294064765159446378195902634553122666031519508653458373801364626796907156918652837961453184912515251722492496853769056007056222605281803303377223245158930080581216344814858180859850388248516110876304421350734473865383370328091654104048265291335553686536171725033973437997155180998731315175192344098133206744942235940959001435284014629247610235987290001278275024859859011530610";
+        let r: &str = "23469954723780858594246099985284351679616402035799877801904657600748845577732527349622767465073206402501465434997097886062288454586744002070231423281154066427914375124691393663408153322045175238293238130584029098551997891083995941940072522297040482563102994301991914687415608932934232322244422743863612925485379738169539911563673020855346364903207395531099432657381392680821739845416005854261986810418869105342379811199853817109183567590778515098199155952701550697969915592026323126896564744857660315540347612223681727710811401589383421009333736638539423942798822879086915723828754886239159868603235567977031107975333";
+        let c: &str = "257203447105391916804089534214900683312963097096490235488958404866382741464385583184601128552670618981990000105037083690090594298564475202598013462067431119022723496775733949006049841771523035314712582893707414778394151736782745046995179058013948782711907055567514176057362937274003340106139237726460592991291649036854647465105678112034545238612525869223794770077034914371840530192251732830868984008901241006294086749915286415154943481920642073417739888367146198161135533211217852125267939460775999200943311678088646957279291231065720239752089787957176968565441059132771040186019584522752156210356879184733001364159458400826829676108356363700260706055423980900810086835364443358559049002895766426201073894808737170968355348275995156366869463099375320511865686019912874183927654191322970227080404808169296681251742918581398335645810766224246925708682914546637276241236065831895597376590899342810804823166192194221790279822050700148335320259676027171464292155454236417540711787990414904918789189297629562318139402290148344330957118511748943890681355239458737273975338090521441500322894883091962991413705362193011723285869089808996484682861997586072545454669866370589115975111183983919754128226878169359264094995923843080089523149217085";
 
-        let p: BigInt = str::parse(P).unwrap();
-        let q: BigInt = str::parse(Q).unwrap();
-        let x: BigInt = str::parse(X).unwrap();
-        let r: BigInt = str::parse(R).unwrap();
-        let c: BigInt = str::parse(C).unwrap();
-
-        TestValues { p, q, x, r, c }
+        TestValues { 
+            p: str::parse(p).unwrap(),
+            q: str::parse(q).unwrap(), 
+            x: str::parse(x).unwrap(), 
+            r: str::parse(r).unwrap(),
+            c: str::parse(c).unwrap(),
+        }
     }
 }
 
@@ -74,21 +73,30 @@ impl CrtParams {
 pub fn crt(params: &CrtParams, x1: &BigInt, x2: &BigInt) -> BigInt {
     let mut diff = x2 - x1;
     if diff.sign() == Sign::Negative {
+        // TODO(Morten) how much smaller than m2 can diff be?
+        // maybe we can get rid of the mod reduction
         diff = (diff % &params.m2) + &params.m2;
     }
     let u = (diff * &params.m1_inv) % &params.m2;
     let x = x1 + (u * &params.m1);
     x
 }
-
+ 
 pub struct Keypair {
-    p: BigInt,
-    q: BigInt,
+    pub p: BigInt,
+    pub q: BigInt,
 }
 
 mod plain {
 
-    use ::*;
+    use test::Bencher;
+    use ::TestValues;
+
+    use ::BigInt;
+    use ::inv;
+    use ::Keypair;
+    use ::l;
+    use ::pow;
 
     struct EncryptionKey {
         n: BigInt,
@@ -272,7 +280,14 @@ mod plain {
 
 mod specialized {
 
-    use ::*;
+    use test::Bencher;
+    use ::TestValues;
+
+    use ::BigInt;
+    use ::inv;
+    use ::Keypair;
+    use ::l;
+    use ::pow;
 
     pub struct EncryptionKey {
         pub n: BigInt,
@@ -449,7 +464,12 @@ mod specialized {
 
 mod precomputed_randomness {
 
-    use ::*;
+    use test::Bencher;
+    use ::TestValues;
+
+    use ::BigInt;
+    use ::Keypair;
+    use ::pow;
 
     use ::specialized::EncryptionKey;
 
@@ -495,12 +515,30 @@ mod precomputed_randomness {
 
 mod crt {
 
-    use ::*;
+    use test::Bencher;
+    use ::TestValues;
+
+    use ::BigInt;
+    use ::crt;
+    use ::CrtParams;
+    use ::inv;
+    use ::Keypair;
+    use ::l;
+    use ::h;
+    use ::pow;
+
+    struct ComponentDecryptionKey {
+        n: BigInt,
+        m: BigInt,
+        mm: BigInt,
+        d1: BigInt,
+        d2: BigInt,
+        e: BigInt,
+    }
 
     struct DecryptionKey {
-        n: BigInt,
-        p: BigInt, pp: BigInt, d1p: BigInt, d2p: BigInt, ep: BigInt,
-        q: BigInt, qq: BigInt, d1q: BigInt, d2q: BigInt, eq: BigInt,
+        p_cdk: ComponentDecryptionKey,
+        q_cdk: ComponentDecryptionKey,
         n_crt: CrtParams,
         nn_crt: CrtParams,
     }
@@ -514,23 +552,38 @@ mod crt {
             let pp = &p * &p;
             let qq = &q * &q;
 
-            let order_of_p = &p - 1;
-            let ep = inv(&n, &order_of_p);
-            let d2p = h(&p, &pp, &n);
-            let d1p = order_of_p;
-            
-            let order_of_q = &q - 1;
-            let eq = inv(&n, &order_of_q);
-            let d2q = h(&q, &qq, &n);
-            let d1q = order_of_q;
+            let p_cdk = {
+                let order_of_p = &p - 1;
+                let e = inv(&n, &order_of_p);
+                let d2 = h(&p, &pp, &n);
+                let d1 = order_of_p;
+
+                let n = n.clone();
+                let m = p.clone();
+                let mm = pp.clone();
+
+                ComponentDecryptionKey { n, m, mm, d1, d2, e }
+            };
+
+            let q_cdk = {
+                let order_of_q = &q - 1;
+                let e = inv(&n, &order_of_q);
+                let d2 = h(&q, &qq, &n);
+                let d1 = order_of_q;
+
+                let n = n.clone();
+                let m = q.clone();
+                let mm = qq.clone();
+
+                ComponentDecryptionKey { n, m, mm, d1, d2, e }
+            };
 
             let n_crt = CrtParams::new(&p, &q);
             let nn_crt = CrtParams::new(&pp, &qq);
 
             DecryptionKey {
-                n,
-                p, pp, d1p, d2p, ep,
-                q, qq, d1q, d2q, eq,
+                p_cdk,
+                q_cdk,
                 n_crt,
                 nn_crt,
             }
@@ -551,18 +604,18 @@ mod crt {
     }
 
     fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
-        let cp = encrypt_component(x, r, &dk.n, &dk.p, &dk.pp);
-        let cq = encrypt_component(x, r, &dk.n, &dk.q, &dk.qq);
+        let cp = encrypt_component(&dk.p_cdk, x, r);
+        let cq = encrypt_component(&dk.q_cdk, x, r);
         let c = crt(&dk.nn_crt, &cp, &cq);
         c
     }
 
-    fn encrypt_component(x: &BigInt, r: &BigInt, n: &BigInt, m: &BigInt, mm: &BigInt) -> BigInt {
-        let xm = x % m;
-        let rm = r % mm;
-        let gx = (1 + xm * n) % mm;
-        let rn = pow(&rm, n, mm);
-        let cm = (gx * rn) % mm;
+    fn encrypt_component(cdk: &ComponentDecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
+        let xm = x % &cdk.m;
+        let rm = r % &cdk.mm;
+        let gx = (1 + xm * &cdk.n) % &cdk.mm;
+        let rn = pow(&rm, &cdk.n, &cdk.mm);
+        let cm = (gx * rn) % &cdk.mm;
         cm
     }
 
@@ -598,17 +651,17 @@ mod crt {
     }
 
     fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
-        let xp = decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p);
-        let xq = decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q);
+        let xp = decrypt_component(&dk.p_cdk, c);
+        let xq = decrypt_component(&dk.q_cdk, c);
         let x = crt(&dk.n_crt, &xp, &xq);
         x
     }
 
-    fn decrypt_component(c: &BigInt, m: &BigInt, mm: &BigInt, d1: &BigInt, d2: &BigInt) -> BigInt {
-        let cm = c % mm;
-        let dm = pow(&cm, d1, mm);
-        let lm = l(&dm, m);
-        let xm = (lm * d2) % m;
+    fn decrypt_component(cdk: &ComponentDecryptionKey, c: &BigInt) -> BigInt {
+        let cm = c % &cdk.mm;
+        let dm = pow(&cm, &cdk.d1, &cdk.mm);
+        let lm = l(&dm, &cdk.m);
+        let xm = (lm * &cdk.d2) % &cdk.m;
         xm
     }
 
@@ -642,15 +695,15 @@ mod crt {
     }
 
     fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
-        let rp = extract_component(c, &dk.p, &dk.ep);
-        let rq = extract_component(c, &dk.q, &dk.eq);
+        let rp = extract_component(&dk.p_cdk, c);
+        let rq = extract_component(&dk.q_cdk, c);
         let r = crt(&dk.n_crt, &rp, &rq);
         r
     }
 
-    fn extract_component(c: &BigInt, m: &BigInt, e: &BigInt) -> BigInt {
-        let rm = c % m;
-        let r = pow(&rm, e, m);
+    fn extract_component(cdk: &ComponentDecryptionKey, c: &BigInt) -> BigInt {
+        let rm = c % &cdk.m;
+        let r = pow(&rm, &cdk.e, &cdk.m);
         r
     }
 
@@ -685,15 +738,24 @@ mod crt {
 
     mod parallel {
 
-        use ::*;
-        use ::crt::{DecryptionKey, encrypt_component, decrypt_component, extract_component};
-
         use rayon::join;
+
+        use test::Bencher;
+        use ::TestValues;
+
+        use ::BigInt;
+        use ::crt;
+        use ::Keypair;
+
+        use ::crt::DecryptionKey;
+        use ::crt::decrypt_component;
+        use ::crt::encrypt_component;
+        use ::crt::extract_component;
 
         fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
             let (cp, cq) = join(
-                || encrypt_component(x, r, &dk.n, &dk.p, &dk.pp),
-                || encrypt_component(x, r, &dk.n, &dk.p, &dk.qq),
+                || encrypt_component(&dk.p_cdk, x, r),
+                || encrypt_component(&dk.q_cdk, x, r),
             );
             crt(&dk.nn_crt, &cp, &cq)
         }
@@ -716,8 +778,8 @@ mod crt {
 
         fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
             let (mp, mq) = join(
-                || decrypt_component(c, &dk.p, &dk.pp, &dk.d1p, &dk.d2p),
-                || decrypt_component(c, &dk.q, &dk.qq, &dk.d1q, &dk.d2q),
+                || decrypt_component(&dk.p_cdk, c),
+                || decrypt_component(&dk.q_cdk, c),
             );
             crt(&dk.n_crt, &mp, &mq)
         }
@@ -739,8 +801,8 @@ mod crt {
 
         fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
             let (rp, rq) = join(
-                || extract_component(c, &dk.p, &dk.ep),
-                || extract_component(c, &dk.q, &dk.eq),
+                || extract_component(&dk.p_cdk, c),
+                || extract_component(&dk.q_cdk, c),
             );
             crt(&dk.n_crt, &rp, &rq)
         }
@@ -764,8 +826,10 @@ mod crt {
 
 mod micro {
 
-    use super::{BigInt, pow};
-    use super::Bencher;
+    use test::Bencher;
+
+    use ::BigInt;
+    use ::pow;
 
     mod decrypt_pow {
 
