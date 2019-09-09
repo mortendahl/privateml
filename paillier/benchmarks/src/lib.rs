@@ -16,8 +16,8 @@ pub struct TestValues {
     pub c: BigInt,
 }
 
-impl TestValues {    
-    pub fn parse() -> Self {
+impl Default for TestValues {
+    fn default() -> Self {
         let p: &str = "148677972634832330983979593310074301486537017973460461278300587514468301043894574906886127642530475786889672304776052879927627556769456140664043088700743909632312483413393134504352834240399191134336344285483935856491230340093391784574980688823380828143810804684752914935441384845195613674104960646037368551517";
         let q: &str = "158741574437007245654463598139927898730476924736461654463975966787719309357536545869203069369466212089132653564188443272208127277664424448947476335413293018778018615899291704693105620242763173357203898195318179150836424196645745308205164116144020613415407736216097185962171301808761138424668335445923774195463";
         let x: &str = "8116954461269652085230775933492366253929619979964246027246617328236243795946267984122836662596238827711003162168747438362516197517513090468979133736169125128476037082825330864610731186580002727070392849209478375921588198871833235568390694413294064765159446378195902634553122666031519508653458373801364626796907156918652837961453184912515251722492496853769056007056222605281803303377223245158930080581216344814858180859850388248516110876304421350734473865383370328091654104048265291335553686536171725033973437997155180998731315175192344098133206744942235940959001435284014629247610235987290001278275024859859011530610";
@@ -104,7 +104,7 @@ mod plain {
         g: BigInt,
     }
 
-    impl EncryptionKey {
+    impl From<&Keypair> for EncryptionKey {
         fn from(keypair: &Keypair) -> EncryptionKey {
             let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
@@ -116,7 +116,7 @@ mod plain {
 
     #[bench]
     fn bench_encryption_key(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         
@@ -136,7 +136,7 @@ mod plain {
 
     #[test]
     fn test_encrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -151,7 +151,7 @@ mod plain {
 
     #[bench]
     fn bench_encrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -174,7 +174,7 @@ mod plain {
         e: BigInt,
     }
 
-    impl DecryptionKey {
+    impl From<&Keypair> for DecryptionKey {
         fn from(keypair: &Keypair) -> DecryptionKey {
             let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
@@ -191,7 +191,7 @@ mod plain {
 
     #[bench]
     fn bench_decryption_key(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         
@@ -211,7 +211,7 @@ mod plain {
 
     #[test]
     fn test_decrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -225,7 +225,7 @@ mod plain {
 
     #[bench]
     fn bench_decrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let c = test_values.c;
@@ -249,7 +249,7 @@ mod plain {
 
     #[test]
     fn test_extract() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let r = test_values.r;
@@ -263,7 +263,7 @@ mod plain {
 
     #[bench]
     fn bench_extract(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let c = test_values.c;
@@ -294,8 +294,8 @@ mod specialized {
         pub nn: BigInt,
     }
 
-    impl EncryptionKey {
-        pub fn from(keypair: &Keypair) -> EncryptionKey {
+    impl From<&Keypair> for EncryptionKey {
+        fn from(keypair: &Keypair) -> EncryptionKey {
             let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
             
@@ -305,7 +305,7 @@ mod specialized {
 
     #[bench]
     fn bench_encryption_key(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         
@@ -325,7 +325,7 @@ mod specialized {
 
     #[test]
     fn test_encrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -340,7 +340,7 @@ mod specialized {
 
     #[bench]
     fn bench_encrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -362,7 +362,7 @@ mod specialized {
         e: BigInt,
     }
 
-    impl DecryptionKey {
+    impl From<&Keypair> for DecryptionKey {
         fn from(keypair: &Keypair) -> DecryptionKey {
             let n = &keypair.p * &keypair.q;
             let nn = &n * &n;
@@ -378,7 +378,7 @@ mod specialized {
 
     #[bench]
     fn bench_decryption_key(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         
@@ -398,7 +398,7 @@ mod specialized {
 
     #[test]
     fn test_decrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -412,7 +412,7 @@ mod specialized {
 
     #[bench]
     fn bench_decrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let c = test_values.c;
@@ -433,7 +433,7 @@ mod specialized {
 
     #[test]
     fn test_extract() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let r = test_values.r;
@@ -447,7 +447,7 @@ mod specialized {
 
     #[bench]
     fn bench_extract(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let c = test_values.c;
@@ -481,7 +481,7 @@ mod precomputed_randomness {
 
     #[test]
     fn test_encrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -497,7 +497,7 @@ mod precomputed_randomness {
 
     #[bench]
     fn bench_encrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -527,7 +527,7 @@ mod crt {
     use ::h;
     use ::pow;
 
-    struct ComponentDecryptionKey {
+    pub struct ComponentDecryptionKey {
         n: BigInt,
         m: BigInt,
         mm: BigInt,
@@ -536,14 +536,14 @@ mod crt {
         e: BigInt,
     }
 
-    struct DecryptionKey {
-        p_cdk: ComponentDecryptionKey,
-        q_cdk: ComponentDecryptionKey,
-        n_crt: CrtParams,
-        nn_crt: CrtParams,
+    pub struct DecryptionKey {
+        pub p_cdk: ComponentDecryptionKey,
+        pub q_cdk: ComponentDecryptionKey,
+        pub n_crt: CrtParams,
+        pub nn_crt: CrtParams,
     }
 
-    impl DecryptionKey {
+    impl From<&Keypair> for DecryptionKey {
         fn from(keypair: &Keypair) -> DecryptionKey {
             let p = keypair.p.clone();
             let q = keypair.q.clone();
@@ -592,7 +592,7 @@ mod crt {
 
     #[bench]
     fn bench_decryption_key(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         
@@ -610,7 +610,7 @@ mod crt {
         c
     }
 
-    fn encrypt_component(cdk: &ComponentDecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
+    pub fn encrypt_component(cdk: &ComponentDecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
         let xm = x % &cdk.m;
         let rm = r % &cdk.mm;
         let gx = (1 + xm * &cdk.n) % &cdk.mm;
@@ -621,7 +621,7 @@ mod crt {
 
     #[test]
     fn test_encrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -636,7 +636,7 @@ mod crt {
 
     #[bench]
     fn bench_encrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -657,7 +657,7 @@ mod crt {
         x
     }
 
-    fn decrypt_component(cdk: &ComponentDecryptionKey, c: &BigInt) -> BigInt {
+    pub fn decrypt_component(cdk: &ComponentDecryptionKey, c: &BigInt) -> BigInt {
         let cm = c % &cdk.mm;
         let dm = pow(&cm, &cdk.d1, &cdk.mm);
         let lm = l(&dm, &cdk.m);
@@ -667,7 +667,7 @@ mod crt {
 
     #[test]
     fn test_decrypt() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let x = test_values.x;
@@ -681,7 +681,7 @@ mod crt {
 
     #[bench]
     fn bench_decrypt(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let c = test_values.c;
@@ -701,7 +701,7 @@ mod crt {
         r
     }
 
-    fn extract_component(cdk: &ComponentDecryptionKey, c: &BigInt) -> BigInt {
+    pub fn extract_component(cdk: &ComponentDecryptionKey, c: &BigInt) -> BigInt {
         let rm = c % &cdk.m;
         let r = pow(&rm, &cdk.e, &cdk.m);
         r
@@ -709,7 +709,7 @@ mod crt {
 
     #[test]
     fn test_extract() {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let r = test_values.r;
@@ -723,7 +723,7 @@ mod crt {
 
     #[bench]
     fn bench_extract(b: &mut Bencher) {
-        let test_values = TestValues::parse();
+        let test_values = TestValues::default();
         let p = test_values.p;
         let q = test_values.q;
         let c = test_values.c;
@@ -736,91 +736,92 @@ mod crt {
         });
     }
 
-    mod parallel {
+}
 
-        use rayon::join;
+mod crt_parallel {
 
-        use test::Bencher;
-        use ::TestValues;
+    use rayon::join;
 
-        use ::BigInt;
-        use ::crt;
-        use ::Keypair;
+    use test::Bencher;
+    use ::TestValues;
 
-        use ::crt::DecryptionKey;
-        use ::crt::decrypt_component;
-        use ::crt::encrypt_component;
-        use ::crt::extract_component;
+    use ::BigInt;
+    use ::crt;
+    use ::Keypair;
 
-        fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
-            let (cp, cq) = join(
-                || encrypt_component(&dk.p_cdk, x, r),
-                || encrypt_component(&dk.q_cdk, x, r),
-            );
-            crt(&dk.nn_crt, &cp, &cq)
-        }
+    use ::crt::DecryptionKey;
+    use ::crt::decrypt_component;
+    use ::crt::encrypt_component;
+    use ::crt::extract_component;
 
-        #[bench]
-        fn bench_encrypt(b: &mut Bencher) {
-            let test_values = TestValues::parse();
-            let p = test_values.p;
-            let q = test_values.q;
-            let x = test_values.x;
-            let r = test_values.r;
+    fn encrypt(dk: &DecryptionKey, x: &BigInt, r: &BigInt) -> BigInt {
+        let (cp, cq) = join(
+            || encrypt_component(&dk.p_cdk, x, r),
+            || encrypt_component(&dk.q_cdk, x, r),
+        );
+        crt(&dk.nn_crt, &cp, &cq)
+    }
 
-            let keypair = Keypair { p, q };
-            let dk = DecryptionKey::from(&keypair);
+    #[bench]
+    fn bench_encrypt(b: &mut Bencher) {
+        let test_values = TestValues::default();
+        let p = test_values.p;
+        let q = test_values.q;
+        let x = test_values.x;
+        let r = test_values.r;
 
-            b.iter(|| {
-                let _ = encrypt(&dk, &x, &r);
-            });
-        }
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
-        fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
-            let (mp, mq) = join(
-                || decrypt_component(&dk.p_cdk, c),
-                || decrypt_component(&dk.q_cdk, c),
-            );
-            crt(&dk.n_crt, &mp, &mq)
-        }
+        b.iter(|| {
+            let _ = encrypt(&dk, &x, &r);
+        });
+    }
 
-        #[bench]
-        fn bench_decrypt(b: &mut Bencher) {
-            let test_values = TestValues::parse();
-            let p = test_values.p;
-            let q = test_values.q;
-            let c = test_values.c;
+    fn decrypt(dk: &DecryptionKey, c: &BigInt) -> BigInt {
+        let (mp, mq) = join(
+            || decrypt_component(&dk.p_cdk, c),
+            || decrypt_component(&dk.q_cdk, c),
+        );
+        crt(&dk.n_crt, &mp, &mq)
+    }
 
-            let keypair = Keypair { p, q };
-            let dk = DecryptionKey::from(&keypair);
+    #[bench]
+    fn bench_decrypt(b: &mut Bencher) {
+        let test_values = TestValues::default();
+        let p = test_values.p;
+        let q = test_values.q;
+        let c = test_values.c;
 
-            b.iter(|| {
-                let _ = decrypt(&dk, &c);
-            });
-        }
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
 
-        fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
-            let (rp, rq) = join(
-                || extract_component(&dk.p_cdk, c),
-                || extract_component(&dk.q_cdk, c),
-            );
-            crt(&dk.n_crt, &rp, &rq)
-        }
+        b.iter(|| {
+            let _ = decrypt(&dk, &c);
+        });
+    }
 
-        #[bench]
-        fn bench_extract(b: &mut Bencher) {
-            let test_values = TestValues::parse();
-            let p = test_values.p;
-            let q = test_values.q;
-            let c = test_values.c;
+    fn extract(dk: &DecryptionKey, c: &BigInt) -> BigInt {
+        let (rp, rq) = join(
+            || extract_component(&dk.p_cdk, c),
+            || extract_component(&dk.q_cdk, c),
+        );
+        crt(&dk.n_crt, &rp, &rq)
+    }
 
-            let keypair = Keypair { p, q };
-            let dk = DecryptionKey::from(&keypair);
+    #[bench]
+    fn bench_extract(b: &mut Bencher) {
+        let test_values = TestValues::default();
+        let p = test_values.p;
+        let q = test_values.q;
+        let c = test_values.c;
 
-            b.iter(|| {
-                let _ = extract(&dk, &c);
-            });
-        }
+        let keypair = Keypair { p, q };
+        let dk = DecryptionKey::from(&keypair);
+
+        b.iter(|| {
+            let _ = extract(&dk, &c);
+        });
     }
 }
 
